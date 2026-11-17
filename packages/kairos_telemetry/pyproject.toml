@@ -15,3 +15,9 @@ build-backend = "uv_build"
 
 [tool.uv.sources]
 kairos-domain = { workspace = true }
+kairos-harness = { workspace = true }
+
+[dependency-groups]
+dev = [
+    "kairos-harness",
+]

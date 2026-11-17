@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine
 
 from kairos_db import Lease, PostgresCheckpointer
 from kairos_harness import AgentLoop, Checkpointer, Hooks, LoopConfig, Provider, ToolExecutor
+from kairos_harness.cassette import ReplayProvider
 from kairos_providers import anthropic_provider, bedrock_provider
 from kairos_tools import ToolRegistry
 from kairos_tools.builtin import current_time_tool
@@ -20,6 +21,10 @@ log = structlog.get_logger(__name__)
 
 
 def build_provider(settings: Settings) -> Provider:
+    if settings.provider == "replay":
+        if settings.replay_cassette is None:
+            raise ValueError("KAIROS_PROVIDER=replay needs KAIROS_REPLAY_CASSETTE")
+        return ReplayProvider(settings.replay_cassette, name="anthropic")
     if settings.provider == "bedrock":
         return bedrock_provider(
             region=settings.bedrock_region, model_prefix=settings.bedrock_model_prefix

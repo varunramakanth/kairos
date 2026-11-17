@@ -1,0 +1,59 @@
+"""The storage seam the scheduler and the schedule tools need.
+
+``kairos_db.JobStore`` implements it on Postgres. The scheduler only decides; the
+store makes each decision durable in one lease-guarded transaction.
+"""
+
+from collections.abc import Callable, Sequence
+from datetime import datetime
+from typing import Protocol
+
+from kairos_domain.jobs import Job, JobSpec, JobStatus
+from kairos_domain.scheduling import Claim, Finished, Firing, Settlement
+
+__all__ = ["Claim", "Finished", "Firing", "JobRepository", "SchedulerStore", "Settlement"]
+
+
+class JobRepository(Protocol):
+    """Create, read and change jobs. Used by the API and the schedule tools."""
+
+    async def create(
+        self,
+        job_id: str,
+        spec: JobSpec,
+        *,
+        status: JobStatus,
+        next_run_at: datetime | None,
+        now: datetime,
+    ) -> Job:
+        """Insert a job; creating an existing id returns the existing job unchanged."""
+        ...
+
+    async def get(self, job_id: str) -> Job | None: ...
+
+    async def list_jobs(self, *, include_deleted: bool = False) -> Sequence[Job]: ...
+
+    async def set_status(
+        self, job_id: str, status: JobStatus, *, next_run_at: datetime | None, now: datetime
+    ) -> Job | None: ...
+
+
+class SchedulerStore(JobRepository, Protocol):
+    """The scheduler loop's view: claim, fire, close and settle."""
+
+    async def claim_due(self, *, now: datetime, ttl_seconds: float) -> Claim | None:
+        """Lease the most overdue active job with no run in progress, if any."""
+        ...
+
+    async def fire(self, claim: Claim, firing: Firing, *, now: datetime) -> bool:
+        """Queue the run and advance the job in one transaction. ``False`` if the
+        lease was lost (another scheduler owns the job)."""
+        ...
+
+    async def close(self, claim: Claim, status: JobStatus, *, now: datetime) -> bool:
+        """End a job without firing it (expired)."""
+        ...
+
+    async def settle_next(self, decide: Callable[[Finished], Settlement], *, now: datetime) -> bool:
+        """Settle one finished job run with ``decide``. ``False`` when none is waiting."""
+        ...

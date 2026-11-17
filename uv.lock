@@ -365,6 +365,18 @@ wheels = [
 ]
 
 [[package]]
+name = "croniter"
+version = "7.0.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "python-dateutil" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/54/17/3c60d4cf8c8768f8a116328f94ddb2f205e64d5afbb1bcb85f315bfbbf42/croniter-7.0.0.tar.gz", hash = "sha256:a0b2568303c774f6a4ea2d4ce2e72b1ee911029c7070d64a1befe05cdb107f5a", size = 191123, upload-time = "2026-11-09T06:52:40.106Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/4c/89/10f9987ebdef47dbe9db94e9c00dcbd91a6ff1aa46ad58bee5b50fa454c9/croniter-7.0.0-py3-none-any.whl", hash = "sha256:92090bce3cef195a037a46b78430c4cdd6250e90671d9d7dcd9e486147daaca4", size = 63225, upload-time = "2026-11-09T06:52:38.545Z" },
+]
+
+[[package]]
 name = "dateparser"
 version = "1.5.1"
 source = { registry = "https://pypi.org/simple" }
@@ -795,6 +807,7 @@ dependencies = [
     { name = "kairos-db" },
     { name = "kairos-domain" },
     { name = "kairos-harness" },
+    { name = "kairos-scheduler" },
     { name = "kairos-worker" },
     { name = "uvicorn", extra = ["standard"] },
 ]
@@ -805,6 +818,7 @@ requires-dist = [
     { name = "kairos-db", editable = "packages/kairos_db" },
     { name = "kairos-domain", editable = "packages/kairos_domain" },
     { name = "kairos-harness", editable = "packages/kairos_harness" },
+    { name = "kairos-scheduler", editable = "packages/kairos_scheduler" },
     { name = "kairos-worker", editable = "services/worker" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.54" },
 ]
@@ -919,11 +933,19 @@ name = "kairos-scheduler"
 version = "0.1.0"
 source = { editable = "packages/kairos_scheduler" }
 dependencies = [
+    { name = "croniter" },
     { name = "kairos-domain" },
+    { name = "kairos-harness" },
+    { name = "kairos-tools" },
 ]
 
 [package.metadata]
-requires-dist = [{ name = "kairos-domain", editable = "packages/kairos_domain" }]
+requires-dist = [
+    { name = "croniter", specifier = ">=7,<8" },
+    { name = "kairos-domain", editable = "packages/kairos_domain" },
+    { name = "kairos-harness", editable = "packages/kairos_harness" },
+    { name = "kairos-tools", editable = "packages/kairos_tools" },
+]
 
 [[package]]
 name = "kairos-telemetry"
@@ -978,6 +1000,7 @@ dependencies = [
     { name = "kairos-domain" },
     { name = "kairos-harness" },
     { name = "kairos-providers" },
+    { name = "kairos-scheduler" },
     { name = "kairos-telemetry" },
     { name = "kairos-tools" },
     { name = "pydantic-settings" },
@@ -991,6 +1014,7 @@ requires-dist = [
     { name = "kairos-domain", editable = "packages/kairos_domain" },
     { name = "kairos-harness", editable = "packages/kairos_harness" },
     { name = "kairos-providers", editable = "packages/kairos_providers" },
+    { name = "kairos-scheduler", editable = "packages/kairos_scheduler" },
     { name = "kairos-telemetry", editable = "packages/kairos_telemetry" },
     { name = "kairos-tools", editable = "packages/kairos_tools" },
     { name = "pydantic-settings", specifier = ">=2.9" },
@@ -1014,6 +1038,7 @@ dev = [
     { name = "ruff" },
     { name = "testcontainers" },
     { name = "time-machine" },
+    { name = "types-croniter" },
 ]
 
 [package.metadata]
@@ -1029,6 +1054,7 @@ dev = [
     { name = "ruff", specifier = ">=0.12" },
     { name = "testcontainers", extras = ["postgres"], specifier = ">=4.10" },
     { name = "time-machine", specifier = ">=2.16" },
+    { name = "types-croniter", specifier = ">=6.2.4.20261006" },
 ]
 
 [[package]]
@@ -2163,6 +2189,15 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/6c/aa/0de7986aa1fa856adb961c67345189b97d13f6e250b34ba68884df865f07/typer-0.29.1.tar.gz", hash = "sha256:ab6eb3880bf67ce96147734717f9ec333c06f66e361f3ea947d0be43da39f242", size = 205843, upload-time = "2026-11-11T09:18:39.782Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/05/ff/51969745f31cea6bcd12151e668febcf979656316e67a7755942267c1273/typer-0.29.1-py3-none-any.whl", hash = "sha256:00dbc549c13428bec1be55fe1f4d0fb8c6637a310e4f178ef14abe9534ee7b58", size = 121064, upload-time = "2026-11-11T09:18:38.671Z" },
+]
+
+[[package]]
+name = "types-croniter"
+version = "6.2.4.20261006"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/7c/3d/ce852f015fd6ae2babd67b8e5a7c8dedb52f1cd717b6cac6da3483e82f89/types_croniter-6.2.4.20261006.tar.gz", hash = "sha256:7c2bccf800beed6f52ec89f5f8f23b2c0b0cd9c941f059c2a7405de0e62fb54b", size = 12368, upload-time = "2026-10-06T08:15:24.32Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/e6/d0/98d0e4fb118717b308ddfad8ca18ba1cc2419439a224dc49a89a46067eea/types_croniter-6.2.4.20261006-py3-none-any.whl", hash = "sha256:1aff83e76866cd01abbe3bb3b18b27f038d65a097b5995bdcc11a658d972cfa0", size = 9787, upload-time = "2026-10-06T08:15:23.47Z" },
 ]
 
 [[package]]

@@ -1,0 +1,15 @@
+[project]
+name = "kairos-scheduler"
+version = "0.1.0"
+description = "Cron, interval, one-shot and watch definitions with timezone-safe next-run calculation."
+requires-python = ">=3.12"
+dependencies = [
+    "kairos-domain",
+]
+
+[build-system]
+requires = ["uv_build>=0.9,<0.13"]
+build-backend = "uv_build"
+
+[tool.uv.sources]
+kairos-domain = { workspace = true }

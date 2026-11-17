@@ -1,0 +1,15 @@
+[project]
+name = "kairos-policy"
+version = "0.1.0"
+description = "Action risk classification, approval rules, budgets and the kill switch."
+requires-python = ">=3.12"
+dependencies = [
+    "kairos-domain",
+]
+
+[build-system]
+requires = ["uv_build>=0.9,<0.13"]
+build-backend = "uv_build"
+
+[tool.uv.sources]
+kairos-domain = { workspace = true }

@@ -1,0 +1,17 @@
+[project]
+name = "kairos-worker"
+version = "0.1.0"
+description = "Durable run executor and scheduler loop."
+requires-python = ">=3.12"
+dependencies = [
+    "kairos-domain",
+    "kairos-harness",
+]
+
+[build-system]
+requires = ["uv_build>=0.9,<0.13"]
+build-backend = "uv_build"
+
+[tool.uv.sources]
+kairos-domain = { workspace = true }
+kairos-harness = { workspace = true }

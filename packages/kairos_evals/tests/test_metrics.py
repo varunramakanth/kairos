@@ -17,7 +17,7 @@ from kairos_evals import (
     summarize,
     traces_from_otlp,
 )
-from kairos_evals.metrics import BudgetAdherence, ToolSelectionAccuracy
+from kairos_evals.metrics import BudgetAdherence, CitationGrounding, ToolSelectionAccuracy
 
 
 def attribute(key: str, value: str | int | float) -> dict[str, Any]:
@@ -183,3 +183,51 @@ async def test_file_source_filters_by_root_attributes(tmp_path: Path) -> None:
     red = TraceFilter(attribute_equals={"team": "red"})
     assert [t async for t in source.load(red)] == []
     assert [t async for t in source.load(TraceFilter(trace_ids=frozenset({"other"})))] == []
+
+
+def research_trace(answer: str, *pages: str) -> Trace:
+    root = span(
+        "a1", "invoke_agent x", gen_ai__operation__name="invoke_agent", output__value=answer
+    )
+    tools = [
+        span(
+            f"c{i}",
+            "execute_tool web_fetch",
+            "a1",
+            gen_ai__operation__name="execute_tool",
+            gen_ai__tool__name="web_fetch",
+            output__value=page,
+        )
+        for i, page in enumerate(pages, start=1)
+    ]
+    (trace,) = traces_from_otlp([document(root, *tools)])
+    return trace
+
+
+async def test_citation_grounding_passes_when_every_link_was_seen() -> None:
+    trace = research_trace(
+        "See [A](https://www.a.example/post/) and [B](http://b.example/x).",
+        "1. A post\n   https://a.example/post\n",
+        "URL: https://b.example/x\n\nbody",
+    )
+    score = await CitationGrounding().evaluate(trace)
+    assert score.passed
+    assert score.reason == "2/2 citations grounded"
+
+
+async def test_citation_grounding_flags_invented_sources() -> None:
+    trace = research_trace(
+        "See [A](https://a.example/post) and [Made up](https://nowhere.example/x).",
+        "https://a.example/post",
+    )
+    score = await CitationGrounding().evaluate(trace)
+    assert not score.passed
+    assert score.value == 0.5
+    assert "nowhere.example" in score.reason
+
+
+async def test_citation_grounding_needs_answer_text_and_enough_citations() -> None:
+    no_content = research_trace("", "x")
+    assert not (await CitationGrounding().evaluate(no_content)).passed
+    one_link = research_trace("[A](https://a.example)", "https://a.example")
+    assert not (await CitationGrounding(min_citations=3).evaluate(one_link)).passed

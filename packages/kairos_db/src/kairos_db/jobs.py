@@ -19,8 +19,10 @@ from pydantic import TypeAdapter
 from sqlalchemy import RowMapping, text
 from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine
 
+from kairos_db.governance import insert_audit, insert_notification
 from kairos_db.queue import insert_run
 from kairos_domain.content import Message
+from kairos_domain.governance import DigestData, DigestJob, Notification, NotificationKind
 from kairos_domain.jobs import (
     Alert,
     Job,
@@ -298,6 +300,107 @@ class JobStore:
             )
         return True
 
+    async def fire_digest(
+        self,
+        claim: Claim,
+        *,
+        job_run_id: str,
+        scheduled_for: datetime,
+        next_run_at: datetime | None,
+        notification: Notification,
+        now: datetime,
+    ) -> bool:
+        """Record a digest firing and queue its notification. No agent run."""
+        async with self._engine.begin() as connection:
+            result = await connection.execute(
+                text(
+                    "UPDATE jobs SET next_run_at = :next, last_run_at = :now, lease_id = NULL, "
+                    "lease_until = NULL, updated_at = :now WHERE id = :id AND lease_id = :lease"
+                ),
+                {"next": next_run_at, "now": now, "id": claim.job.id, "lease": claim.lease_id},
+            )
+            if result.rowcount != 1:
+                return False
+            await connection.execute(
+                text(
+                    "INSERT INTO job_runs (id, job_id, run_id, scheduled_for, status, created_at, "
+                    "finished_at) VALUES (:id, :job, NULL, :slot, 'succeeded', :now, :now)"
+                ),
+                {"id": job_run_id, "job": claim.job.id, "slot": scheduled_for, "now": now},
+            )
+            await insert_notification(
+                connection,
+                notification,
+                dedupe_key=f"digest:{claim.job.id}:{scheduled_for.isoformat()}",
+            )
+            await insert_audit(
+                connection, actor="system", action="digest.queued", subject=claim.job.id
+            )
+        return True
+
+    async def digest_data(self, *, since: datetime, until: datetime) -> DigestData:
+        params = {"since": since, "until": until}
+        async with self._engine.connect() as connection:
+            alerts = await connection.execute(
+                text(
+                    "SELECT j.spec->>'name' AS name, a.message FROM alerts a JOIN jobs j "
+                    "ON j.id = a.job_id WHERE a.created_at >= :since AND a.created_at < :until "
+                    "ORDER BY a.created_at"
+                ),
+                params,
+            )
+            jobs = await connection.execute(
+                text(
+                    """
+                    SELECT j.id, j.spec->>'name' AS name, j.spec->>'kind' AS kind, j.status,
+                           count(r.id) AS runs,
+                           count(r.id) FILTER (WHERE r.status = 'failed') AS failures,
+                           (SELECT o.observation FROM watch_observations o
+                             WHERE o.job_id = j.id ORDER BY o.created_at DESC LIMIT 1) AS latest
+                      FROM jobs j
+                      JOIN job_runs r ON r.job_id = j.id
+                       AND r.created_at >= :since AND r.created_at < :until
+                     WHERE j.spec->>'kind' <> 'digest'
+                     GROUP BY j.id ORDER BY j.spec->>'name'
+                    """
+                ),
+                params,
+            )
+            pending = (
+                await connection.execute(
+                    text("SELECT count(*) FROM approvals WHERE status = 'pending'")
+                )
+            ).scalar_one()
+            spend = (
+                await connection.execute(
+                    text(
+                        "SELECT count(*) AS runs, COALESCE(sum((state->>'cost_usd')::float), 0) "
+                        "AS cost FROM runs WHERE created_at >= :since AND created_at < :until"
+                    ),
+                    params,
+                )
+            ).one()
+            job_rows = [
+                DigestJob(
+                    name=row.name,
+                    kind=row.kind,
+                    runs=int(row.runs),
+                    failures=int(row.failures),
+                    status=row.status,
+                    latest=_latest_text(row.latest),
+                )
+                for row in jobs
+            ]
+            return DigestData(
+                since=since,
+                until=until,
+                alerts=[f"{row.name}: {row.message}" for row in alerts],
+                jobs=job_rows,
+                pending_approvals=int(pending),
+                runs=int(spend.runs),
+                cost_usd=float(spend.cost),
+            )
+
     async def close(self, claim: Claim, status: JobStatus, *, now: datetime) -> bool:
         async with self._engine.begin() as connection:
             result = await connection.execute(
@@ -322,7 +425,7 @@ class JobStore:
                                r.state->>'error' AS run_error,
                                r.state->'messages' AS run_messages
                           FROM job_runs jr JOIN runs r ON r.id = jr.run_id
-                         WHERE jr.status = 'started' AND r.status IN ('finished', 'paused')
+                         WHERE jr.status = 'started' AND r.status = 'finished'
                          ORDER BY jr.created_at
                            FOR UPDATE OF jr SKIP LOCKED
                          LIMIT 1
@@ -436,6 +539,16 @@ async def _record(
             },
         )
     if outcome.alert is not None and outcome.dedupe_key is not None:
+        await insert_notification(
+            connection,
+            Notification(
+                kind=NotificationKind.ALERT,
+                title=f"{job.spec.name}: alert",
+                body=outcome.alert,
+                url=f"/tasks/{job.id}",
+            ),
+            dedupe_key=f"alert:{job.id}:{outcome.dedupe_key}:{run_id}",
+        )
         await connection.execute(
             text(
                 "INSERT INTO alerts (job_id, run_id, message, dedupe_key, created_at) "
@@ -449,3 +562,14 @@ async def _record(
                 "now": now,
             },
         )
+
+
+def _latest_text(raw: Any) -> str | None:
+    if not raw:
+        return None
+    observation = Observation.model_validate(raw)
+    if not observation.found:
+        return "not found"
+    if observation.value is not None:
+        return f"{observation.value:g}" + (f" {observation.unit}" if observation.unit else "")
+    return observation.text[:80] or None

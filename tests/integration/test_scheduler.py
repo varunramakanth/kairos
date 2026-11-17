@@ -283,3 +283,45 @@ async def test_a_cron_job_follows_the_wall_clock_through_spring_forward(
     job = await store.get("job_1")
     assert job is not None
     assert job.next_run_at == datetime(2026, 3, 9, 12, 0, tzinfo=UTC)
+
+
+async def test_the_weekly_digest_is_built_from_data_and_queued(engine: AsyncEngine) -> None:
+    from kairos_domain.jobs import JobRunStatus
+    from kairos_scheduler.scheduler import DIGEST_JOB_ID, digest_spec
+    from kairos_scheduler.timing import next_fire
+
+    sunday_1759 = datetime(2026, 11, 22, 22, 59, tzinfo=UTC)  # 17:59 in Toronto
+    clock = FakeClock(sunday_1759 - timedelta(days=1))
+    store = JobStore(engine)
+    spec = digest_spec()
+    await store.create(
+        DIGEST_JOB_ID,
+        spec,
+        status=JobStatus.ACTIVE,
+        next_run_at=next_fire(spec.schedule, after=clock.now()),
+        now=clock.now(),
+    )
+    await store.create(
+        "job_w", FARE_WATCH, status=JobStatus.ACTIVE, next_run_at=clock.now(), now=clock.now()
+    )
+    sched = scheduler(store, clock)
+    await sched.tick()
+    await execute_queued_run(engine, observe(1420))
+    await sched.tick()  # settles: an alert and its notification
+
+    clock.advance(24 * HOUR)  # Sunday 17:59
+    assert DIGEST_JOB_ID not in (await sched.tick()).fired
+    clock.advance(60)  # 18:00
+    assert DIGEST_JOB_ID in (await sched.tick()).fired
+
+    notes = await rows(engine, "SELECT kind, payload FROM notifications ORDER BY id")
+    assert [n.kind for n in notes] == ["alert", "digest"]
+    digest = notes[1].payload
+    assert digest["title"] == "Weekly digest: 1 alerts"
+    assert "YYZ-CJB fare: lowest fare in CAD is 1420 CAD, below 1500" in digest["body"]
+    assert digest["channels"] == ["console", "email"]
+    detail = await store.detail(DIGEST_JOB_ID)
+    assert detail is not None
+    (run,) = detail.runs
+    assert (run.run_id, run.status) == (None, JobRunStatus.SUCCEEDED)
+    assert detail.job.next_run_at == datetime(2026, 11, 29, 23, 0, tzinfo=UTC)

@@ -7,10 +7,12 @@ from collections.abc import Sequence
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine
 
+from kairos_db.governance import insert_approval
 from kairos_db.notify import notify_committed
 from kairos_db.queue import Lease
 from kairos_domain.errors import LostLeaseError
 from kairos_domain.events import (
+    ApprovalRequested,
     DurableEvent,
     ModelCallFinished,
     ToolCallEnd,
@@ -183,6 +185,16 @@ class PostgresCheckpointer:
                     "is_error": event.is_error,
                     "duration_ms": event.duration_ms,
                 },
+            )
+        elif isinstance(event, ApprovalRequested):
+            await insert_approval(
+                connection,
+                run_id=run_id,
+                tool_call_id=event.tool_call_id,
+                name=event.name,
+                tool_input=event.input,
+                reason=event.reason,
+                risk=event.risk.value,
             )
         elif isinstance(event, ToolCallUncertain):
             await connection.execute(

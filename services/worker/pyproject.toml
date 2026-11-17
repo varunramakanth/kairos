@@ -8,6 +8,7 @@ dependencies = [
     "kairos-domain",
     "kairos-harness",
     "kairos-providers",
+    "kairos-scheduler",
     "kairos-telemetry",
     "kairos-tools",
     "pydantic-settings>=2.9",
@@ -29,3 +30,4 @@ kairos-providers = { workspace = true }
 kairos-tools = { workspace = true }
 kairos-db = { workspace = true }
 kairos-telemetry = { workspace = true }
+kairos-scheduler = { workspace = true }

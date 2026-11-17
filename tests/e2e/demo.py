@@ -7,10 +7,13 @@ The model turns below are hand-written, not real model output.
 """
 
 import asyncio
+from collections.abc import Sequence
 from pathlib import Path
+from typing import Any
 
 from pydantic import JsonValue
 
+from kairos_domain.jobs import Job
 from kairos_domain.run import RunRequest
 from kairos_harness import AgentLoop, InMemoryCheckpointer
 from kairos_harness.cassette import RecordingProvider
@@ -46,13 +49,30 @@ SCRIPT: list[Turn] = [
 ]
 
 
+class _SpecsOnly:
+    """Stands in for the job store: only the tool schemas matter for the recording."""
+
+    async def create(self, *args: Any, **kwargs: Any) -> Job:
+        raise NotImplementedError
+
+    async def get(self, job_id: str) -> Job | None:
+        raise NotImplementedError
+
+    async def list_jobs(self, *, include_deleted: bool = False) -> Sequence[Job]:
+        raise NotImplementedError
+
+    async def set_status(self, *args: Any, **kwargs: Any) -> Job | None:
+        raise NotImplementedError
+
+
 async def record() -> None:
+    """Record with the same tool set the API offers (schedule tools included)."""
     CASSETTE.unlink(missing_ok=True)
     settings = Settings(_env_file=None)  # type: ignore[call-arg]  # pydantic-settings option
     async with http_client() as http:
         loop = AgentLoop(
             provider=RecordingProvider(ScriptedProvider(SCRIPT, name="anthropic"), CASSETTE),
-            tools=build_tools(settings, http),
+            tools=build_tools(settings, http, jobs=_SpecsOnly()),
             checkpointer=InMemoryCheckpointer(),
         )
         request = RunRequest(run_id="demo", input=PROMPT, model=MODEL)

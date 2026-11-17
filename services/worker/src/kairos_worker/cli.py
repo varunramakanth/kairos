@@ -116,7 +116,7 @@ def worker() -> None:
             with suppress(NotImplementedError):
                 loop.add_signal_handler(sig, stop.set)
         try:
-            async with open_runtime(settings) as runtime:
+            async with open_runtime(settings, engine=engine) as runtime:
                 await work(runtime, engine, stop)
         finally:
             await engine.dispose()

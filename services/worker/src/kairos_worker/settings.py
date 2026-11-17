@@ -16,6 +16,11 @@ class Settings(BaseSettings):
     """``replay`` serves model calls from ``replay_cassette``: no network, no cost."""
     replay_cassette: Path | None = None
     model: str = "claude-opus-5-5"
+    job_model: str = "claude-haiku-5-5"
+    """Model for scheduled tasks and watches unless a job names its own."""
+    timezone: str = "America/Toronto"
+    """The user's timezone: the default for schedules and how times are shown."""
+    scheduler_poll_seconds: float = 5.0
     bedrock_region: str | None = None
     bedrock_model_prefix: str = "anthropic."
 

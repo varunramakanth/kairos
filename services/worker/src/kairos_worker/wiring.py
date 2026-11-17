@@ -1,16 +1,26 @@
 """Builds concrete objects from settings. The only place that knows every package."""
 
 from dataclasses import dataclass
-from datetime import UTC, datetime
 
 import httpx2
 import structlog
 from sqlalchemy.ext.asyncio import AsyncEngine
 
 from kairos_db import Lease, PostgresCheckpointer
-from kairos_harness import AgentLoop, Checkpointer, Hooks, LoopConfig, Provider, ToolExecutor
+from kairos_harness import (
+    AgentLoop,
+    Checkpointer,
+    Clock,
+    Hooks,
+    LoopConfig,
+    Provider,
+    SystemClock,
+    ToolExecutor,
+)
 from kairos_harness.cassette import ReplayProvider
 from kairos_providers import anthropic_provider, bedrock_provider
+from kairos_scheduler.protocols import JobRepository
+from kairos_scheduler.tools import record_observation_tool, schedule_tools
 from kairos_tools import ToolRegistry
 from kairos_tools.builtin import current_time_tool
 from kairos_tools.plan import plan_tool
@@ -38,14 +48,29 @@ def http_client() -> httpx2.AsyncClient:
     return httpx2.AsyncClient(follow_redirects=False)
 
 
-def build_tools(settings: Settings, http: httpx2.AsyncClient) -> ToolRegistry:
-    """The tool set, in a fixed order (the order is part of the cached prompt prefix)."""
-    tools = ToolRegistry([current_time_tool(lambda: datetime.now(UTC)), plan_tool()])
+def build_tools(
+    settings: Settings,
+    http: httpx2.AsyncClient,
+    *,
+    jobs: JobRepository | None = None,
+    clock: Clock | None = None,
+) -> ToolRegistry:
+    """The tool set, in a fixed order (the order is part of the cached prompt prefix).
+
+    The schedule tools need the job store, so they are only offered when ``jobs`` is
+    given (not in the database-free ``kairos run``).
+    """
+    clock = clock or SystemClock()
+    tools = ToolRegistry([current_time_tool(clock.now), plan_tool()])
     if settings.tavily_api_key is not None:
         tools.register(web_search_tool(settings.tavily_api_key, http))
     else:
         log.warning("web_search_disabled", reason="TAVILY_API_KEY is not set")
     tools.register(web_fetch_tool(http))
+    tools.register(record_observation_tool())
+    if jobs is not None:
+        for item in schedule_tools(jobs, clock, timezone=settings.timezone):
+            tools.register(item)
     return tools
 
 

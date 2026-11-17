@@ -8,6 +8,7 @@ dependencies = [
     "kairos-db",
     "kairos-domain",
     "kairos-harness",
+    "kairos-scheduler",
     "kairos-worker",
     "uvicorn[standard]>=0.54",
 ]
@@ -21,3 +22,4 @@ kairos-domain = { workspace = true }
 kairos-worker = { workspace = true }
 kairos-db = { workspace = true }
 kairos-harness = { workspace = true }
+kairos-scheduler = { workspace = true }

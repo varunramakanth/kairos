@@ -4,6 +4,7 @@ model. Covers threads, multi-turn history, the SSE stream and its resume rule.""
 import json
 from collections.abc import AsyncGenerator, Sequence
 from contextlib import asynccontextmanager
+from datetime import UTC, datetime
 from typing import Any
 
 import httpx2
@@ -13,7 +14,9 @@ from sqlalchemy.ext.asyncio import AsyncEngine
 
 from kairos_api.app import create_app
 from kairos_api.settings import ApiSettings
+from kairos_db import JobStore
 from kairos_domain.content import TextBlock
+from kairos_domain.jobs import JobSpec, JobStatus
 from kairos_harness.testing import ScriptedProvider, Turn, text_turn
 
 pytestmark = pytest.mark.integration
@@ -132,3 +135,80 @@ async def test_unknown_ids_are_404(engine: AsyncEngine, database_url: str) -> No
         missing = await client.post("/threads/thr_nope/messages", json={"text": "x"})
         assert missing.status_code == 404
         assert (await client.post("/threads", json={"text": ""})).status_code == 422
+
+
+WATCH_BODY: dict[str, Any] = {
+    "name": "Monitor price",
+    "kind": "watch",
+    "schedule": {"kind": "interval", "every_seconds": 21600},
+    "watch": {
+        "target": "https://shop.example/monitor",
+        "extract": "price in CAD",
+        "condition": {"kind": "below", "threshold": 400},
+    },
+}
+
+
+async def test_jobs_can_be_created_edited_paused_and_listed(
+    engine: AsyncEngine, database_url: str
+) -> None:
+    async with api(database_url, worker=False) as (client, _):
+        created = await client.post("/jobs", json=WATCH_BODY)
+        assert created.status_code == 201, created.text
+        job = created.json()
+        assert job["status"] == "active"
+        assert job["next_run_at"] is not None
+
+        edited = await client.patch(
+            f"/jobs/{job['id']}", json={"spec": {**WATCH_BODY, "name": "Monitor under $400"}}
+        )
+        assert edited.json()["spec"]["name"] == "Monitor under $400"
+        paused = await client.patch(f"/jobs/{job['id']}", json={"status": "paused"})
+        assert paused.json()["status"] == "paused"
+        assert (await client.post(f"/jobs/{job['id']}/run")).status_code == 409
+
+        resumed = await client.patch(f"/jobs/{job['id']}", json={"status": "active"})
+        assert resumed.json()["status"] == "active"
+        assert (await client.post(f"/jobs/{job['id']}/run")).status_code == 200
+
+        (summary,) = (await client.get("/jobs")).json()
+        assert summary["job"]["id"] == job["id"]
+        assert summary["recent_values"] == []
+        detail = (await client.get(f"/jobs/{job['id']}")).json()
+        assert detail["runs"] == []
+
+        assert (await client.post("/jobs/pause-all")).json() == {"paused": 1}
+        deleted = await client.patch(f"/jobs/{job['id']}", json={"status": "deleted"})
+        assert deleted.json()["status"] == "deleted"
+        assert (await client.get(f"/jobs/{job['id']}")).status_code == 404
+        assert (await client.get("/jobs")).json() == []
+
+
+async def test_an_agent_proposed_job_waits_for_confirmation(
+    engine: AsyncEngine, database_url: str
+) -> None:
+    store = JobStore(engine)
+    now = datetime.now(UTC)
+    spec = JobSpec.model_validate(WATCH_BODY)
+    await store.create(
+        "job_p", spec, status=JobStatus.PENDING_CONFIRMATION, next_run_at=None, now=now
+    )
+    async with api(database_url, worker=False) as (client, _):
+        confirmed = await client.post("/jobs/job_p/confirm")
+        assert confirmed.status_code == 200
+        assert confirmed.json()["status"] == "active"
+        assert confirmed.json()["next_run_at"] is not None
+        assert (await client.post("/jobs/job_p/confirm")).status_code == 409
+
+
+async def test_invalid_jobs_are_rejected(engine: AsyncEngine, database_url: str) -> None:
+    async with api(database_url, worker=False) as (client, _):
+        bad_cron = {**WATCH_BODY, "schedule": {"kind": "cron", "expression": "every day"}}
+        response = await client.post("/jobs", json=bad_cron)
+        assert response.status_code == 422
+        assert "five-field" in response.json()["detail"]
+        no_watch = {**WATCH_BODY, "watch": None}
+        assert (await client.post("/jobs", json=no_watch)).status_code == 422
+        too_often = {**WATCH_BODY, "schedule": {"kind": "interval", "every_seconds": 10}}
+        assert (await client.post("/jobs", json=too_often)).status_code == 422
+        assert (await client.get("/jobs/job_nope")).status_code == 404

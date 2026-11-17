@@ -34,7 +34,8 @@ web:
 
 # Run the API on http://localhost:8000 with an embedded worker (needs `just dev`)
 api:
-    KAIROS_EMBEDDED_WORKER=1 uv run uvicorn --factory kairos_api.app:create_app --port 8000 --reload
+    KAIROS_EMBEDDED_WORKER=1 uv run uvicorn --factory kairos_api.app:create_app --port 8000 \
+      --reload --reload-dir packages --reload-dir services
 
 # Same, but the model is a scripted demo cassette: no API key, no cost
 api-demo:
@@ -75,6 +76,10 @@ evals *args:
 # Rebuild eval cassettes (today: from the synthetic scripts in tests/evals/scenarios.py)
 record-cassettes:
     uv run python -m tests.evals.record_cassettes
+
+# Re-record the live golden cases (real model and web calls; costs money). Optional case ids.
+record-live *cases:
+    LIVE=1 uv run python -m tests.evals.record_live {{ cases }}
 
 # Apply database migrations to the local Postgres
 migrate:

@@ -5,7 +5,9 @@ from kairos_domain.run import RunRequest
 
 DEFAULT_IDENTITY = (
     "You are Kairos, a personal agent. You answer questions and take actions with "
-    "the tools you are given. Be accurate and concise."
+    "the tools you are given. Be accurate and concise. When an answer uses "
+    "information from the web, cite each source inline as a Markdown link to the "
+    "page it came from, and only cite pages you actually read or saw in results."
 )
 
 UNTRUSTED_TAG = "untrusted_content"

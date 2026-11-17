@@ -45,6 +45,12 @@ class RunRequest(DomainModel):
     max_output_tokens: int = 32_000
     budget: Budget = Budget()
     thread_id: str | None = None
+    history: tuple[Message, ...] = ()
+    """Earlier turns of the thread, replayed unchanged before ``input``.
+
+    Keeping them byte-identical (thinking blocks included) is what lets the
+    provider's prompt cache hit across turns, and the API requires it for thinking.
+    """
     metadata: dict[str, str] = Field(default_factory=dict[str, str])
 
 
@@ -75,7 +81,9 @@ class RunState(BaseModel):
     """The checkpoint: enough to continue a run in a fresh process.
 
     Mutable on purpose. The loop owns one instance, updates it step by step and
-    hands it to the ``Checkpointer``. ``messages`` only ever grows.
+    hands it to the ``Checkpointer``. Within an epoch ``messages`` only ever grows.
+    Compaction starts a new epoch: the old messages are archived as a blob and
+    replaced by a summary, so no earlier turn is ever edited in place.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -85,6 +93,10 @@ class RunState(BaseModel):
     stop_reason: StopReason | None = None
     error: str | None = None
     messages: list[Message] = Field(default_factory=list[Message])
+    epoch: int = 0
+    """How many times this run's context has been compacted."""
+    last_input_tokens: int = 0
+    """Prompt size of the most recent model call (cached tokens included)."""
     pending_tool_calls: list[ToolCallRecord] = Field(default_factory=list[ToolCallRecord])
     step: int = 0
     usage: Usage = Usage()

@@ -15,6 +15,11 @@ class Usage(DomainModel):
     cache_creation_input_tokens: int = 0
 
     @property
+    def prompt_tokens(self) -> int:
+        """Size of the prompt, cached or not."""
+        return self.input_tokens + self.cache_read_input_tokens + self.cache_creation_input_tokens
+
+    @property
     def total_tokens(self) -> int:
         return (
             self.input_tokens

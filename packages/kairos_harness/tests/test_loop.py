@@ -6,10 +6,18 @@ from collections.abc import Sequence
 
 import pytest
 
-from kairos_domain.content import Provenance, ToolResultBlock
+from kairos_domain.content import (
+    Message,
+    OpaqueBlock,
+    Provenance,
+    TextBlock,
+    ToolResultBlock,
+    user_text,
+)
 from kairos_domain.errors import LostLeaseError, ProviderError
 from kairos_domain.events import (
     ApprovalRequested,
+    ContextCompacted,
     DurableEvent,
     ModelStreamReset,
     RunEvent,
@@ -36,6 +44,7 @@ from kairos_harness import (
     SeededIdGenerator,
     ToolDecision,
 )
+from kairos_harness.compaction import COMPACTION_INSTRUCTION, CONTINUE_INSTRUCTION
 from kairos_harness.context import UNTRUSTED_TAG
 from kairos_harness.testing import (
     ScriptedProvider,
@@ -539,3 +548,88 @@ async def test_untrusted_output_is_wrapped_and_cannot_close_its_own_wrapper() ->
     # The UI event shows the raw page, not the wrapper.
     (result,) = (e for e in events if isinstance(e, ToolCallResult))
     assert result.output == attack
+
+
+# --- threads and compaction ---------------------------------------------------------
+
+
+async def test_thread_history_is_replayed_unchanged_before_the_new_input() -> None:
+    thinking = OpaqueBlock(provider="anthropic", kind="thinking", data={"signature": "s"})
+    history = (
+        user_text("first question"),
+        Message(role="assistant", content=(thinking, TextBlock(text="first answer"))),
+    )
+    h = Harness([text_turn("second answer")])
+    await h.run(make_request(input="second question", history=history))
+
+    sent = h.provider.requests[0].messages
+    assert sent[:2] == history  # byte-identical, thinking block included
+    assert sent[2] == user_text("second question")
+
+
+async def test_compaction_starts_a_new_epoch_and_archives_the_old_one() -> None:
+    long_page = "fact " * 400  # about 500 estimated tokens
+    calls: list[str] = []
+
+    async def fetch(call: ToolCallRecord, context: ToolContext) -> str:
+        calls.append(call.id)
+        return long_page
+
+    h = Harness(
+        [
+            tool_turn(("t1", "fetch", {})),
+            text_turn("Summary: the user asked for facts; the page said fact x400."),
+            text_turn("Here are the facts."),
+        ],
+        [(simple_spec("fetch"), fetch)],
+        config=LoopConfig(compact_at_prompt_tokens=300),
+    )
+    events = await h.run()
+
+    assert finished(events).stop_reason is StopReason.COMPLETED
+    summary_request = h.provider.requests[1]
+    instruction = summary_request.messages[-1].content[-1]
+    assert isinstance(instruction, TextBlock)
+    assert instruction.text == COMPACTION_INSTRUCTION
+    # The summary call reuses the same prefix, so it is served from the prompt cache.
+    first_messages = h.provider.requests[0].messages
+    assert summary_request.messages[:-1] == (*first_messages, summary_request.messages[1])
+    assert summary_request.system == h.provider.requests[0].system
+
+    (compacted,) = (e for e in events if isinstance(e, ContextCompacted))
+    assert compacted.epoch == 1
+    assert compacted.messages_summarized == 3
+    archived = await h.checkpointer.get_blob(compacted.archive_blob_id)
+    assert archived is not None
+    assert "fact fact" in archived
+
+    final_request = h.provider.requests[2]
+    (first,) = final_request.messages
+    assert first.role == "user"
+    assert "<conversation_summary" in first.text
+    assert CONTINUE_INSTRUCTION in first.text  # the last turn was tool results, not typing
+    state = await h.state()
+    assert state.epoch == 1
+    assert state.usage.output_tokens == 3 * 20  # the summary call is paid for too
+
+
+async def test_compaction_keeps_the_users_latest_message_verbatim() -> None:
+    history = (
+        user_text("x " * 2000),
+        Message(role="assistant", content=(TextBlock(text="ok"),)),
+    )
+    h = Harness(
+        [text_turn("Summary of x."), text_turn("answer")],
+        config=LoopConfig(compact_at_prompt_tokens=500),
+    )
+    await h.run(make_request(input="what now?", history=history))
+
+    (first,) = h.provider.requests[1].messages
+    assert first.content[-1] == TextBlock(text="what now?")
+
+
+async def test_compaction_is_off_below_the_threshold() -> None:
+    h = Harness([text_turn("hi")], config=LoopConfig(compact_at_prompt_tokens=10_000))
+    events = await h.run()
+    assert not any(isinstance(e, ContextCompacted) for e in events)
+    assert len(h.provider.requests) == 1

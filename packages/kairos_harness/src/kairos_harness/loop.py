@@ -11,6 +11,7 @@ can be continued by any process from its last checkpoint.
 """
 
 import asyncio
+import json
 from collections.abc import AsyncIterator, Sequence
 from dataclasses import dataclass, field
 from typing import Any
@@ -21,6 +22,7 @@ from kairos_domain.events import (
     ApprovalRequested,
     BudgetUpdated,
     CheckpointWritten,
+    ContextCompacted,
     DurableEvent,
     ModelCallFinished,
     ModelStreamReset,
@@ -44,7 +46,6 @@ from kairos_domain.model import (
     ModelRequest,
     ModelStopReason,
     ModelTextDelta,
-    ModelToolCallArgsDelta,
     ModelToolCallStart,
 )
 from kairos_domain.run import (
@@ -58,6 +59,7 @@ from kairos_domain.run import (
 from kairos_domain.tools import Deny, RequireApproval, ToolContext, ToolOutput, ToolSpec
 from kairos_harness.budget import PriceTable, exceeded
 from kairos_harness.clock import SystemClock, UuidIdGenerator
+from kairos_harness.compaction import estimate_tokens, new_epoch, summary_request_messages
 from kairos_harness.context import build_system_prompt, present_tool_output, truncate
 from kairos_harness.hooks import BaseHooks
 from kairos_harness.protocols import (
@@ -79,6 +81,9 @@ class LoopConfig:
     """Extra attempts for a model call that failed with a retryable error."""
     retry_backoff_seconds: float = 1.0
     prices: PriceTable = field(default_factory=PriceTable)
+    compact_at_prompt_tokens: int | None = 150_000
+    """Compact the context before a model call whose prompt would exceed this many
+    tokens. ``None`` disables compaction."""
 
 
 class _Session:
@@ -138,7 +143,8 @@ class AgentLoop:
             return  # Nothing to do: running a finished run again is a no-op.
 
         if state is None:
-            state = RunState(request=request, messages=[user_text(request.input)], attempt=1)
+            messages = [*request.history, user_text(request.input)]
+            state = RunState(request=request, messages=messages, attempt=1)
             session = _Session(state, context, self._clock)
             yield session.durable(RunStarted, model=request.model, input=request.input)
         else:
@@ -182,6 +188,10 @@ class AgentLoop:
                 yield event
             return
 
+        if self._needs_compaction(state):
+            async for event in self._compact(session):
+                yield event
+
         state.step += 1
         yield session.durable(StepStarted, step=state.step)
 
@@ -216,6 +226,7 @@ class AgentLoop:
         state.messages.append(completed.message)
         state.usage = state.usage + completed.usage
         state.cost_usd += cost
+        state.last_input_tokens = completed.usage.prompt_tokens
         session.touch_clock()
         await self._hooks.after_model(state, request, completed)
         yield session.durable(
@@ -252,12 +263,14 @@ class AgentLoop:
                 yield event
 
     async def _stream_model(
-        self, session: _Session, request: ModelRequest
+        self, session: _Session, request: ModelRequest, *, live: bool = True
     ) -> AsyncIterator[RunEvent | ModelCompleted]:
         """Stream one model call, retrying retryable failures.
 
         Only ephemeral events are produced while streaming, so a failed attempt
         leaves nothing durable behind. The ``ModelCompleted`` is yielded last.
+        With ``live=False`` (internal calls such as compaction) no stream events
+        are produced at all.
         """
         step = session.state.step
         for attempt in range(self._config.model_retries + 1):
@@ -267,6 +280,11 @@ class AgentLoop:
             run_id = session.state.run_id
             try:
                 async for event in self._provider.stream(request):
+                    if isinstance(event, ModelCompleted):
+                        yield event
+                        return
+                    if not live:
+                        continue
                     if isinstance(event, ModelTextDelta):
                         if not text_started:
                             text_started = True
@@ -281,16 +299,13 @@ class AgentLoop:
                             tool_call_id=event.tool_call_id,
                             name=event.name,
                         )
-                    elif isinstance(event, ModelToolCallArgsDelta):
+                    else:
                         yield ToolCallArgs(
                             run_id=run_id,
                             ts=now(),
                             tool_call_id=event.tool_call_id,
                             delta=event.partial_json,
                         )
-                    else:
-                        yield event
-                        return
                 raise ProviderError("model stream ended without a completion", retryable=True)
             except ProviderError as error:
                 if not error.retryable or attempt == self._config.model_retries:
@@ -386,6 +401,58 @@ class AgentLoop:
         session.touch_clock()
         yield session.durable(BudgetUpdated, spent=state.spent)
         yield session.durable(StepFinished, step=state.step)
+        yield await self._checkpoint(session)
+
+    # --- compaction -------------------------------------------------------------
+
+    def _needs_compaction(self, state: RunState) -> bool:
+        limit = self._config.compact_at_prompt_tokens
+        if limit is None or len(state.messages) < 2:
+            return False
+        return max(state.last_input_tokens, estimate_tokens(state.messages)) > limit
+
+    async def _compact(self, session: _Session) -> AsyncIterator[RunEvent]:
+        """Summarize the context and start a new epoch (see ``compaction.py``)."""
+        state = session.state
+        before = max(state.last_input_tokens, estimate_tokens(state.messages))
+        request = ModelRequest(
+            model=state.request.model,
+            system=build_system_prompt(state.request),
+            messages=summary_request_messages(state.messages),
+            tools=tuple(self._tools.specs()),
+            max_output_tokens=state.request.max_output_tokens,
+            effort=state.request.effort,
+        )
+        completed: ModelCompleted | None = None
+        async for item in self._stream_model(session, request, live=False):
+            if isinstance(item, ModelCompleted):
+                completed = item
+        if completed is None:
+            raise ProviderError("compaction stream ended without a completion", retryable=False)
+        summary = completed.message.text.strip()
+        if not summary:
+            raise ProviderError("compaction returned no summary", retryable=False)
+
+        archive = json.dumps([m.model_dump(mode="json") for m in state.messages])
+        blob_id = await self._checkpointer.put_blob(state.run_id, archive)
+        cost = self._config.prices.cost(completed.model, completed.usage)
+        summarized = len(state.messages)
+        state.epoch += 1
+        state.messages = new_epoch(state.messages, summary, epoch=state.epoch)
+        state.usage = state.usage + completed.usage
+        state.cost_usd += cost
+        state.last_input_tokens = 0
+        yield session.durable(
+            ContextCompacted,
+            epoch=state.epoch,
+            messages_summarized=summarized,
+            input_tokens_before=before,
+            summary=summary,
+            archive_blob_id=blob_id,
+            usage=completed.usage,
+            cost_usd=cost,
+        )
+        yield session.durable(BudgetUpdated, spent=state.spent)
         yield await self._checkpoint(session)
 
     # --- helpers ------------------------------------------------------------------

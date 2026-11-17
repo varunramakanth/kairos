@@ -153,6 +153,22 @@ class BudgetUpdated(DurableEvent):
     spent: BudgetSpent
 
 
+class ContextCompacted(DurableEvent):
+    """The context grew too large and was replaced by a summary (a new epoch).
+
+    The previous epoch's messages are kept in full as ``archive_blob_id``.
+    """
+
+    type: Literal["context_compacted"] = "context_compacted"
+    epoch: int
+    messages_summarized: int
+    input_tokens_before: int
+    summary: str
+    archive_blob_id: str
+    usage: Usage
+    cost_usd: float
+
+
 class CheckpointWritten(EphemeralEvent):
     type: Literal["checkpoint_written"] = "checkpoint_written"
     step: int
@@ -188,6 +204,7 @@ type RunEvent = Annotated[
     | ToolCallUncertain
     | ApprovalRequested
     | BudgetUpdated
+    | ContextCompacted
     | CheckpointWritten
     | RunFinished,
     Field(discriminator="type"),

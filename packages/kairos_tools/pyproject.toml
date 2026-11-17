@@ -5,6 +5,7 @@ description = "Built-in tools and the MCP client bridge."
 requires-python = ">=3.12"
 dependencies = [
     "kairos-domain",
+    "pydantic>=2.11",
 ]
 
 [build-system]

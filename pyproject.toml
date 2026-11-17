@@ -18,6 +18,8 @@ dev = [
     "pytest-asyncio>=1.0",
     "pytest-socket>=0.7",
     "ruff>=0.12",
+    "testcontainers[postgres]>=4.10",
+    "time-machine>=2.16",
 ]
 
 [tool.ruff]
@@ -39,11 +41,17 @@ select = [
     "TID",          # tidy imports
     "ANN",          # annotations required
 ]
-ignore = ["ANN401"]
+ignore = [
+    "ANN401",
+    "PT012",  # multi-statement pytest.raises blocks are needed around async iteration
+]
 
 [tool.ruff.lint.per-file-ignores]
 "**/tests/**" = ["S101"]
 "tests/**" = ["S101"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["kairos_*"]
 
 [tool.ruff.lint.flake8-tidy-imports]
 ban-relative-imports = "all"

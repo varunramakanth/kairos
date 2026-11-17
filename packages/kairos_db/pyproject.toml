@@ -4,7 +4,10 @@ version = "0.1.0"
 description = "SQLAlchemy models, Alembic migrations and Postgres-backed stores."
 requires-python = ">=3.12"
 dependencies = [
+    "alembic>=1.15",
+    "asyncpg>=0.30",
     "kairos-domain",
+    "sqlalchemy[asyncio]>=2.0.40",
 ]
 
 [build-system]

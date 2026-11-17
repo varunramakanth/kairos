@@ -4,8 +4,15 @@ version = "0.1.0"
 description = "Durable run executor and scheduler loop."
 requires-python = ">=3.12"
 dependencies = [
+    "kairos-db",
     "kairos-domain",
     "kairos-harness",
+    "kairos-providers",
+    "kairos-telemetry",
+    "kairos-tools",
+    "pydantic-settings>=2.9",
+    "structlog>=25",
+    "typer>=0.16",
 ]
 
 [build-system]
@@ -15,3 +22,7 @@ build-backend = "uv_build"
 [tool.uv.sources]
 kairos-domain = { workspace = true }
 kairos-harness = { workspace = true }
+kairos-providers = { workspace = true }
+kairos-tools = { workspace = true }
+kairos-db = { workspace = true }
+kairos-telemetry = { workspace = true }

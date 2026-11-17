@@ -4,6 +4,7 @@ version = "0.1.0"
 description = "Framework-agnostic agent eval library. Consumes OpenTelemetry traces; must not import other kairos_* packages."
 requires-python = ">=3.12"
 dependencies = [
+    "pydantic>=2.11",
 ]
 
 [build-system]

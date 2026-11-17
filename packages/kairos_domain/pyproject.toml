@@ -4,6 +4,7 @@ version = "0.1.0"
 description = "Shared Pydantic models: messages, run events, tool schemas. Source of the OpenAPI and TypeScript types."
 requires-python = ">=3.12"
 dependencies = [
+    "pydantic>=2.11",
 ]
 
 [build-system]

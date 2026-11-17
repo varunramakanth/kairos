@@ -377,6 +377,15 @@ wheels = [
 ]
 
 [[package]]
+name = "botocore-stubs"
+version = "1.43.126"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/8c/7a/717e3dec2e4721f76621ddb397b4035ec1aff0c174b80f5c439512a352e9/botocore_stubs-1.43.126.tar.gz", hash = "sha256:15b14ba9066f6eec50a5861407fede151b4395e986036c8d564f4b908835f820", size = 42882, upload-time = "2026-11-06T22:57:14.723Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/66/23/10b0f6ce12d3d85cfaf24d2e420f76e8e744970289e447d43846e51db32d/botocore_stubs-1.43.126-py3-none-any.whl", hash = "sha256:07f1b96c89d787b95ebf0cc5f22fc2b7f61c179e704c289b377505d8d61d5d49", size = 67248, upload-time = "2026-11-06T22:57:12.732Z" },
+]
+
+[[package]]
 name = "certifi"
 version = "2026.10.23"
 source = { registry = "https://pypi.org/simple" }
@@ -1325,6 +1334,7 @@ version = "0.1.0"
 source = { editable = "packages/kairos_notify" }
 dependencies = [
     { name = "aiosmtplib" },
+    { name = "boto3" },
     { name = "kairos-domain" },
     { name = "kairos-harness" },
     { name = "kairos-tools" },
@@ -1335,6 +1345,7 @@ dependencies = [
 [package.metadata]
 requires-dist = [
     { name = "aiosmtplib", specifier = ">=5.1,<6" },
+    { name = "boto3", specifier = ">=1.44,<2" },
     { name = "kairos-domain", editable = "packages/kairos_domain" },
     { name = "kairos-harness", editable = "packages/kairos_harness" },
     { name = "kairos-tools", editable = "packages/kairos_tools" },
@@ -1490,6 +1501,7 @@ dev = [
     { name = "ruff" },
     { name = "testcontainers" },
     { name = "time-machine" },
+    { name = "types-boto3", extra = ["sesv2"] },
     { name = "types-croniter" },
 ]
 
@@ -1506,6 +1518,7 @@ dev = [
     { name = "ruff", specifier = ">=0.12" },
     { name = "testcontainers", extras = ["postgres"], specifier = ">=4.10" },
     { name = "time-machine", specifier = ">=2.16" },
+    { name = "types-boto3", extras = ["sesv2"], specifier = ">=1.44" },
     { name = "types-croniter", specifier = ">=6.2.4.20261006" },
 ]
 
@@ -2929,12 +2942,48 @@ wheels = [
 ]
 
 [[package]]
+name = "types-boto3"
+version = "1.44.3"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "botocore-stubs" },
+    { name = "types-s3transfer" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/a4/ab/c19b1c97e75f8c703d862038e693b2a3f8c7ab5d2ba3036acc9b3d896d85/types_boto3-1.44.3.tar.gz", hash = "sha256:ad7dfcd6baf791888bc8bc5030983c7a31bd7f922d59f4e37d15a2f7eaa571d0", size = 105933, upload-time = "2026-11-13T22:19:32.311Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/13/90/12cc6f75b0fa092c88dfc12ab0b871e708e7794193353517d26adcb2c75b/types_boto3-1.44.3-py3-none-any.whl", hash = "sha256:393bedd01676e638b22f40666d8cb8569bfb3359bf4b50ccd9843883b4647e36", size = 71961, upload-time = "2026-11-13T22:19:25.562Z" },
+]
+
+[package.optional-dependencies]
+sesv2 = [
+    { name = "types-boto3-sesv2" },
+]
+
+[[package]]
+name = "types-boto3-sesv2"
+version = "1.44.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/41/ca/fc9fbd50d095a6e54796537682a11b975f7e9775e395ad39f0b630101154/types_boto3_sesv2-1.44.0.tar.gz", hash = "sha256:2b168dd4e82b4472da7d4445ffa591614cbd6c0be52190a4499ad5e0a2bd6e62", size = 49861, upload-time = "2026-11-10T22:50:09.304Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/25/72/bf5885296b7cde27b844c2d88126070d36abfa222b3968da8a12fa0b0db9/types_boto3_sesv2-1.44.0-py3-none-any.whl", hash = "sha256:30a3adcfb5c7f7e63972d3ace67ff6df210c4fdd9ed742b31bd946c22cb09b08", size = 55679, upload-time = "2026-11-10T22:50:07.572Z" },
+]
+
+[[package]]
 name = "types-croniter"
 version = "6.2.4.20261006"
 source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/7c/3d/ce852f015fd6ae2babd67b8e5a7c8dedb52f1cd717b6cac6da3483e82f89/types_croniter-6.2.4.20261006.tar.gz", hash = "sha256:7c2bccf800beed6f52ec89f5f8f23b2c0b0cd9c941f059c2a7405de0e62fb54b", size = 12368, upload-time = "2026-10-06T08:15:24.32Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/e6/d0/98d0e4fb118717b308ddfad8ca18ba1cc2419439a224dc49a89a46067eea/types_croniter-6.2.4.20261006-py3-none-any.whl", hash = "sha256:1aff83e76866cd01abbe3bb3b18b27f038d65a097b5995bdcc11a658d972cfa0", size = 9787, upload-time = "2026-10-06T08:15:23.47Z" },
+]
+
+[[package]]
+name = "types-s3transfer"
+version = "0.19.3"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/89/b2/4f2d72b5d234c81caa07dee688cacee2c8dc5bd793e9ae70a573f00d6425/types_s3transfer-0.19.3.tar.gz", hash = "sha256:99422ef028a5f854cd92d1e72cf4208bd0569f68a87936ca02fb9f91a68cdcd3", size = 13780, upload-time = "2026-10-20T02:24:19.016Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/f5/98/972fa03c9a6e1cc9184a28ea0354af50a6764bb172fe2d0751798a295f07/types_s3transfer-0.19.3-py3-none-any.whl", hash = "sha256:6843143f3b79e3cb73e58b6f45738e28e88d9f681fd32cc5ef7fa16f0c193356", size = 19476, upload-time = "2026-10-20T02:24:17.682Z" },
 ]
 
 [[package]]

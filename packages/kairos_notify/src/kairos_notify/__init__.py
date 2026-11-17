@@ -5,6 +5,7 @@ from kairos_notify.channels import (
     ChannelError,
     ConsoleChannel,
     PushGone,
+    SesChannel,
     SmtpChannel,
     WebPushChannel,
 )
@@ -18,6 +19,7 @@ __all__ = [
     "Dispatcher",
     "Outbox",
     "PushGone",
+    "SesChannel",
     "SmtpChannel",
     "WebPushChannel",
     "build_digest",

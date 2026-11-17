@@ -4,13 +4,16 @@ import asyncio
 import json
 from collections.abc import Awaitable, Callable, Sequence
 from email.message import EmailMessage
-from typing import Any, Protocol, cast
+from typing import TYPE_CHECKING, Any, Protocol, cast
 
 import aiosmtplib
 import structlog
 from pydantic import SecretStr
 
 from kairos_domain.governance import Notification, PushSubscription
+
+if TYPE_CHECKING:
+    from types_boto3_sesv2 import SESV2Client
 
 log = structlog.get_logger(__name__)
 
@@ -103,6 +106,103 @@ class SmtpChannel:
             raise ChannelError(f"SMTP login failed ({error.code})", retryable=False) from error
         except aiosmtplib.SMTPException as error:
             raise ChannelError(f"SMTP error: {type(error).__name__}") from error
+
+
+type SesSend = Callable[[dict[str, Any]], Awaitable[None]]
+
+# SES errors where retrying cannot help: fix the setup instead.
+_SES_PERMANENT = {
+    "MessageRejected",
+    "MailFromDomainNotVerifiedException",
+    "AccountSuspendedException",
+    "BadRequestException",
+    "NotFoundException",
+    "AccessDeniedException",
+    "AccessDenied",
+    "UnrecognizedClientException",
+    "InvalidClientTokenId",
+}
+
+
+class SesChannel:
+    """Email to the owner through Amazon SES (API v2), send-only.
+
+    Credentials come from the standard AWS chain (``AWS_PROFILE``, SSO, an instance
+    role). Give them only ``ses:SendEmail`` on the sender identity, ideally with
+    ``ses:FromAddress`` and ``ses:Recipients`` conditions: then the key can send to
+    the owner and do nothing else (see ADR-010).
+    """
+
+    name = "email"
+
+    def __init__(
+        self,
+        *,
+        recipient: str,
+        sender: str,
+        region: str,
+        profile: str | None = None,
+        base_url: str = "http://localhost:3000",
+        send: SesSend | None = None,
+    ) -> None:
+        self._recipient = recipient
+        self._sender = sender
+        self._region = region
+        self._profile = profile
+        self._base_url = base_url
+        self._send = send or self._boto_send
+        self._client: SESV2Client | None = None
+
+    def request(self, notification: Notification) -> dict[str, Any]:
+        link = _link(notification, self._base_url)
+        body = notification.body + (f"\n\nOpen in Kairos: {link}" if link else "")
+        return {
+            "FromEmailAddress": f"Kairos <{self._sender}>",
+            "Destination": {"ToAddresses": [self._recipient]},
+            "Content": {
+                "Simple": {
+                    "Subject": {"Data": f"[Kairos] {notification.title}", "Charset": "UTF-8"},
+                    "Body": {"Text": {"Data": body, "Charset": "UTF-8"}},
+                }
+            },
+        }
+
+    async def send(self, notification: Notification) -> None:
+        await self._send(self.request(notification))
+
+    async def _boto_send(self, request: dict[str, Any]) -> None:
+        # boto3 is synchronous; keep it off the event loop.
+        await asyncio.to_thread(self._send_blocking, request)
+
+    def _send_blocking(self, request: dict[str, Any]) -> None:
+        import boto3
+        from botocore.exceptions import (
+            BotoCoreError,
+            ClientError,
+            NoCredentialsError,
+            ProfileNotFound,
+        )
+
+        try:
+            if self._client is None:
+                # Only the sesv2 stubs are installed; other services overloads are unknown.
+                session = boto3.Session(profile_name=self._profile, region_name=self._region)
+                self._client = session.client("sesv2")  # pyright: ignore[reportUnknownMemberType]
+            self._client.send_email(**request)
+        except ProfileNotFound as error:
+            raise ChannelError(
+                f"AWS profile {self._profile!r} not found", retryable=False
+            ) from error
+        except NoCredentialsError as error:
+            raise ChannelError(
+                "no AWS credentials found (set AWS_PROFILE or run `aws sso login`)",
+                retryable=False,
+            ) from error
+        except ClientError as error:
+            code = str(error.response.get("Error", {}).get("Code", "Unknown"))
+            raise ChannelError(f"SES {code}", retryable=code not in _SES_PERMANENT) from error
+        except BotoCoreError as error:
+            raise ChannelError(f"SES {type(error).__name__}") from error
 
 
 class PushGone(Exception):

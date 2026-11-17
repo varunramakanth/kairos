@@ -14,7 +14,14 @@ from kairos_db.governance import ApprovalStore, AuditStore, NotificationStore, S
 from kairos_domain.governance import ApprovalStatus
 from kairos_domain.jobs import JobStatus
 from kairos_harness import Clock, HookChain, Hooks, Provider, RunContext, SystemClock
-from kairos_notify import Channel, ConsoleChannel, Dispatcher, SmtpChannel, WebPushChannel
+from kairos_notify import (
+    Channel,
+    ConsoleChannel,
+    Dispatcher,
+    SesChannel,
+    SmtpChannel,
+    WebPushChannel,
+)
 from kairos_policy import PolicyHooks
 from kairos_scheduler.scheduler import DIGEST_JOB_ID, Scheduler, digest_spec
 from kairos_scheduler.timing import next_fire
@@ -90,7 +97,17 @@ def channels(settings: Settings, store: NotificationStore) -> list[Channel]:
     """Delivery channels that are configured. The console is always on."""
     configured: list[Channel] = [ConsoleChannel()]
     to, username, password = settings.email_to, settings.smtp_username, settings.smtp_password
-    if to and username and password:
+    if settings.email_provider == "ses" and to:
+        configured.append(
+            SesChannel(
+                recipient=to,
+                sender=settings.email_from or to,
+                region=settings.ses_region,
+                profile=settings.ses_profile,
+                base_url=settings.web_base_url,
+            )
+        )
+    elif settings.email_provider == "smtp" and to and username and password:
         configured.append(
             SmtpChannel(
                 recipient=to,

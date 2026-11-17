@@ -44,8 +44,16 @@ class Settings(BaseSettings):
     """Enables ``web_search``. Without it the tool is not offered to the model."""
 
     # --- notifications (M4) ---------------------------------------------------------
+    email_provider: Literal["ses", "smtp"] | None = None
+    """How email is sent. ``ses`` (recommended, send-only credentials) or ``smtp``.
+    Unset means no email."""
     email_to: str | None = None
     """The owner's address. Email can only ever go here."""
+    email_from: str | None = None
+    """SES: the verified sender identity. Defaults to ``email_to``."""
+    ses_region: str = "ca-central-1"
+    ses_profile: str | None = None
+    """AWS profile holding the send-only SES credentials (kept apart from other AWS use)."""
     smtp_username: str | None = None
     smtp_password: SecretStr | None = None
     """For Gmail: an app password (Google Account > Security > App passwords)."""
@@ -59,7 +67,10 @@ class Settings(BaseSettings):
 
     @field_validator(
         "tavily_api_key",
+        "email_provider",
         "email_to",
+        "email_from",
+        "ses_profile",
         "smtp_username",
         "smtp_password",
         "vapid_public_key",
@@ -73,7 +84,11 @@ class Settings(BaseSettings):
 
     @property
     def email_configured(self) -> bool:
-        return bool(self.email_to and self.smtp_username and self.smtp_password)
+        if self.email_provider == "ses":
+            return bool(self.email_to)
+        if self.email_provider == "smtp":
+            return bool(self.email_to and self.smtp_username and self.smtp_password)
+        return False
 
     @property
     def push_configured(self) -> bool:

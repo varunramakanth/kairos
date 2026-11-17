@@ -2,7 +2,9 @@ from collections.abc import Mapping, Sequence
 from datetime import UTC, datetime, timedelta
 from email.message import EmailMessage
 
+import boto3
 import pytest
+from botocore.stub import Stubber
 from pydantic import SecretStr
 
 from kairos_domain.governance import (
@@ -23,6 +25,7 @@ from kairos_notify import (
     ConsoleChannel,
     Dispatcher,
     PushGone,
+    SesChannel,
     SmtpChannel,
     WebPushChannel,
     build_digest,
@@ -245,3 +248,60 @@ async def test_notify_me_says_exactly_where_the_message_went(
     ((notification, key),) = queued
     assert notification.channels == channels
     assert key == "notify:t1"
+
+
+def ses_channel() -> tuple[SesChannel, Stubber]:
+    client = boto3.client(  # pyright: ignore[reportUnknownMemberType]  # only sesv2 stubs installed
+        "sesv2",
+        region_name="ca-central-1",
+        aws_access_key_id="test",
+        aws_secret_access_key="test",  # noqa: S106 (fake key; the stubber never sends)
+    )
+    channel = SesChannel(
+        recipient="owner@example.com", sender="owner@example.com", region="ca-central-1"
+    )
+    channel._client = client  # pyright: ignore[reportPrivateUsage]  # inject the stubbed client
+    return channel, Stubber(client)
+
+
+async def test_ses_sends_a_plain_text_email_to_the_owner_only() -> None:
+    channel, stubber = ses_channel()
+    stubber.add_response(
+        "send_email",
+        {"MessageId": "m-1"},
+        {
+            "FromEmailAddress": "Kairos <owner@example.com>",
+            "Destination": {"ToAddresses": ["owner@example.com"]},
+            "Content": {
+                "Simple": {
+                    "Subject": {"Data": "[Kairos] Fare under $1500", "Charset": "UTF-8"},
+                    "Body": {
+                        "Text": {
+                            "Data": "1420 CAD\n\nOpen in Kairos: http://localhost:3000/tasks/job_1",
+                            "Charset": "UTF-8",
+                        }
+                    },
+                }
+            },
+        },
+    )
+    with stubber:
+        await channel.send(ALERT)
+    stubber.assert_no_pending_responses()
+
+
+@pytest.mark.parametrize(
+    ("code", "retryable"),
+    [
+        ("MessageRejected", False),
+        ("AccessDeniedException", False),
+        ("TooManyRequestsException", True),
+    ],
+)
+async def test_ses_errors_say_whether_a_retry_can_help(code: str, retryable: bool) -> None:
+    channel, stubber = ses_channel()
+    stubber.add_client_error("send_email", service_error_code=code, http_status_code=400)
+    with stubber, pytest.raises(ChannelError) as raised:
+        await channel.send(ALERT)
+    assert str(raised.value) == f"SES {code}"
+    assert raised.value.retryable is retryable

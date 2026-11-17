@@ -5,6 +5,7 @@ description = "Notification channels: email and web push."
 requires-python = ">=3.12"
 dependencies = [
     "aiosmtplib>=5.1,<6",
+    "boto3>=1.44,<2",
     "kairos-domain",
     "kairos-harness",
     "kairos-tools",

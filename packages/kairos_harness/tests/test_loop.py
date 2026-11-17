@@ -24,6 +24,8 @@ from kairos_domain.events import (
     RunFinished,
     RunResumed,
     TextMessageDelta,
+    TextMessageEnd,
+    TextMessageStart,
     ToolCallResult,
     ToolCallUncertain,
 )
@@ -633,3 +635,11 @@ async def test_compaction_is_off_below_the_threshold() -> None:
     events = await h.run()
     assert not any(isinstance(e, ContextCompacted) for e in events)
     assert len(h.provider.requests) == 1
+
+
+async def test_streamed_text_ends_under_the_id_it_started_with() -> None:
+    h = Harness([text_turn("Hi")])
+    events = await h.run()
+    (start,) = (e for e in events if isinstance(e, TextMessageStart))
+    (end,) = (e for e in events if isinstance(e, TextMessageEnd))
+    assert start.message_id == end.message_id

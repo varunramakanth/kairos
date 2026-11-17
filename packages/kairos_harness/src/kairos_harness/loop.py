@@ -94,6 +94,9 @@ class _Session:
         self.context = context
         self.clock = clock
         self.buffer: list[DurableEvent] = []
+        self.message_id = ""
+        """Id of the text message streamed by the latest model call, so the durable
+        ``text_message_end`` matches the live ``text_message_start``."""
         self._active_base = state.active_seconds
         self._segment_start = clock.monotonic()
 
@@ -216,7 +219,7 @@ class AgentLoop:
 
         text = completed.message.text
         if text:
-            yield session.durable(TextMessageEnd, message_id=self._ids.new_id("msg"), text=text)
+            yield session.durable(TextMessageEnd, message_id=session.message_id, text=text)
         for block in completed.message.tool_uses:
             yield session.durable(
                 ToolCallEnd, tool_call_id=block.id, name=block.name, input=block.input
@@ -275,6 +278,7 @@ class AgentLoop:
         step = session.state.step
         for attempt in range(self._config.model_retries + 1):
             message_id = self._ids.new_id("msg")
+            session.message_id = message_id
             text_started = False
             now = session.clock.now
             run_id = session.state.run_id

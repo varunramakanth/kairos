@@ -7,6 +7,7 @@ from collections.abc import Sequence
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine
 
+from kairos_db.notify import notify_committed
 from kairos_db.queue import Lease
 from kairos_domain.errors import LostLeaseError
 from kairos_domain.events import (
@@ -118,6 +119,9 @@ class PostgresCheckpointer:
                     },
                 )
                 await self._project(connection, state, event)
+            if events:
+                # Delivered on commit, so listeners never see a seq they cannot read yet.
+                await notify_committed(connection, state.run_id, events[-1].seq)
 
     async def put_blob(self, run_id: str, content: str) -> str:
         blob_id = f"blob_{uuid.uuid4().hex}"

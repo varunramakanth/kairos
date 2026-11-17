@@ -22,12 +22,23 @@ def _created() -> Mapped[datetime]:
     return mapped_column(server_default=func.now())
 
 
+class Thread(Base):
+    __tablename__ = "threads"
+
+    id: Mapped[str] = mapped_column(Text, primary_key=True)
+    title: Mapped[str] = mapped_column(Text)
+    created_at: Mapped[datetime] = _created()
+    updated_at: Mapped[datetime] = _created()
+
+
 class Run(Base):
     __tablename__ = "runs"
     __table_args__ = (Index("ix_runs_due", "status", "lease_until"),)
 
     id: Mapped[str] = mapped_column(Text, primary_key=True)
-    thread_id: Mapped[str | None] = mapped_column(Text, index=True)
+    thread_id: Mapped[str | None] = mapped_column(
+        Text, ForeignKey("threads.id", ondelete="CASCADE"), index=True
+    )
     status: Mapped[str] = mapped_column(Text)
     stop_reason: Mapped[str | None] = mapped_column(Text)
     request: Mapped[dict[str, Any]]

@@ -8,7 +8,7 @@ import uuid
 from dataclasses import dataclass
 
 from sqlalchemy import TextClause, text
-from sqlalchemy.ext.asyncio import AsyncEngine
+from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine
 
 from kairos_domain.run import RunRequest, RunStatus, StopReason
 
@@ -59,6 +59,24 @@ _ABANDON = text(
 )
 
 
+_INSERT_RUN = text(
+    "INSERT INTO runs (id, thread_id, status, request) "
+    "VALUES (:id, :thread_id, 'queued', CAST(:request AS jsonb))"
+)
+
+
+async def insert_run(connection: AsyncConnection, request: RunRequest) -> None:
+    """Queue a run inside the caller's transaction."""
+    await connection.execute(
+        _INSERT_RUN,
+        {
+            "id": request.run_id,
+            "thread_id": request.thread_id,
+            "request": request.model_dump_json(),
+        },
+    )
+
+
 @dataclass(frozen=True)
 class Lease:
     """Proof that this worker owns a run, until ``lease_until`` passes in the database."""
@@ -76,17 +94,7 @@ class RunQueue:
     async def enqueue(self, request: RunRequest) -> None:
         """Add a run. It becomes visible to workers when the transaction commits."""
         async with self._engine.begin() as connection:
-            await connection.execute(
-                text(
-                    "INSERT INTO runs (id, thread_id, status, request) "
-                    "VALUES (:id, :thread_id, 'queued', CAST(:request AS jsonb))"
-                ),
-                {
-                    "id": request.run_id,
-                    "thread_id": request.thread_id,
-                    "request": request.model_dump_json(),
-                },
-            )
+            await insert_run(connection, request)
 
     async def claim(self, *, ttl_seconds: float) -> Lease | None:
         """Take the oldest due run, or return ``None`` if there is none.

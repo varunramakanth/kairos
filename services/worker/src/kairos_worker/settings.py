@@ -2,6 +2,7 @@
 
 from typing import Literal
 
+from pydantic import AliasChoices, Field, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -23,3 +24,11 @@ class Settings(BaseSettings):
     """OTLP/HTTP base endpoint for traces, e.g. Langfuse's ``/api/public/otel``."""
     otlp_headers: str = ""
     """Comma-separated ``key=value`` pairs sent with every export."""
+
+    compact_at_prompt_tokens: int | None = 150_000
+    """Compact a run's context when its prompt would exceed this many tokens."""
+
+    tavily_api_key: SecretStr | None = Field(
+        default=None, validation_alias=AliasChoices("TAVILY_API_KEY", "KAIROS_TAVILY_API_KEY")
+    )
+    """Enables ``web_search``. Without it the tool is not offered to the model."""

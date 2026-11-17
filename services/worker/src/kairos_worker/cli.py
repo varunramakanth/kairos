@@ -12,47 +12,24 @@ import signal
 import sys
 import uuid
 from contextlib import suppress
-from importlib.metadata import version
 from pathlib import Path
 from typing import Annotated
 
 import structlog
 import typer
-from opentelemetry.sdk.trace import TracerProvider
 
 from kairos_db import RunQueue, create_engine
 from kairos_db.migrate import upgrade
 from kairos_domain.events import RunEvent
 from kairos_domain.run import RunRequest
-from kairos_harness import HookChain, Hooks, InMemoryCheckpointer, Provider
+from kairos_harness import InMemoryCheckpointer, Provider
 from kairos_harness.cassette import RecordingProvider, ReplayProvider
-from kairos_telemetry import TracingHooks, configure_tracing
+from kairos_worker.service import open_runtime, work
 from kairos_worker.settings import Settings
-from kairos_worker.wiring import build_durable_loop, build_loop, build_provider
-from kairos_worker.worker import Worker
+from kairos_worker.wiring import build_provider
 
 app = typer.Typer(no_args_is_help=True, add_completion=False)
 log = structlog.get_logger(__name__)
-HARNESS_VERSION = version("kairos-harness")
-
-
-def _otlp_headers(raw: str) -> dict[str, str]:
-    pairs = (item.split("=", 1) for item in raw.split(",") if "=" in item)
-    return {key.strip(): value.strip() for key, value in pairs}
-
-
-def _tracing(settings: Settings, provider: Provider) -> tuple[TracerProvider, Hooks]:
-    tracer_provider = configure_tracing(
-        service_version=HARNESS_VERSION,
-        otlp_endpoint=settings.otlp_endpoint,
-        otlp_headers=_otlp_headers(settings.otlp_headers),
-    )
-    hooks = TracingHooks(
-        tracer_provider.get_tracer("kairos"),
-        provider_name=provider.name,
-        harness_version=HARNESS_VERSION,
-    )
-    return tracer_provider, HookChain([hooks])
 
 
 def _print_event(event: RunEvent) -> None:
@@ -61,6 +38,8 @@ def _print_event(event: RunEvent) -> None:
         sys.stdout.flush()
     elif event.type == "tool_call_end":
         sys.stdout.write(f"\n[tool] {event.name} {event.input}\n")
+    elif event.type == "context_compacted":
+        sys.stdout.write(f"\n[compacted {event.messages_summarized} messages]\n")
     elif event.type == "run_finished":
         detail = f" ({event.error})" if event.error else ""
         sys.stdout.write(
@@ -92,16 +71,13 @@ def run(
         )
         if record:
             provider = RecordingProvider(provider, record)
-        tracer_provider, hooks = _tracing(settings, provider)
-        loop = build_loop(provider, InMemoryCheckpointer(), hooks)
-        request = RunRequest(
-            run_id=f"run_{uuid.uuid4().hex}", input=prompt, model=model or settings.model
-        )
-        try:
+        async with open_runtime(settings, provider=provider) as runtime:
+            loop = runtime.loop(InMemoryCheckpointer())
+            request = RunRequest(
+                run_id=f"run_{uuid.uuid4().hex}", input=prompt, model=model or settings.model
+            )
             async for event in loop.run(request):
                 _print_event(event)
-        finally:
-            tracer_provider.shutdown()
 
     asyncio.run(main())
 
@@ -134,27 +110,16 @@ def worker() -> None:
 
     async def main() -> None:
         engine = create_engine(settings.database_url)
-        provider = build_provider(settings)
-        tracer_provider, hooks = _tracing(settings, provider)
         stop = asyncio.Event()
         loop = asyncio.get_running_loop()
         for sig in (signal.SIGINT, signal.SIGTERM):
             with suppress(NotImplementedError):
                 loop.add_signal_handler(sig, stop.set)
-        runner = Worker(
-            RunQueue(engine),
-            lambda lease: build_durable_loop(settings, engine, provider, lease, hooks),
-            lease_ttl_seconds=settings.lease_ttl_seconds,
-            poll_seconds=settings.poll_seconds,
-            max_attempts=settings.max_attempts,
-        )
-        log.info("worker_started", provider=provider.name, model=settings.model)
         try:
-            await runner.run_forever(stop)
+            async with open_runtime(settings) as runtime:
+                await work(runtime, engine, stop)
         finally:
-            tracer_provider.shutdown()
             await engine.dispose()
-        log.info("worker_stopped")
 
     asyncio.run(main())
 

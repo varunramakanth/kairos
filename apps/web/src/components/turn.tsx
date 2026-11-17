@@ -5,6 +5,7 @@ import Link from "next/link";
 import type { RunDetail } from "@/client/types.gen";
 import { Markdown } from "@/components/markdown";
 import { PlanChecklist } from "@/components/plan-checklist";
+import { ScheduleProposal } from "@/components/schedule-proposal";
 import { ToolCard } from "@/components/tool-card";
 import { useRunStream } from "@/hooks/use-run-stream";
 import { PLAN_TOOL } from "@/lib/run-view";
@@ -64,6 +65,12 @@ export function Turn({
           }
           if (item.kind === "tool") {
             if (item.call.name === PLAN_TOOL) return null;
+            if (
+              item.call.name === "schedule_create" &&
+              item.call.status === "done"
+            ) {
+              return <ScheduleProposal key={item.call.id} call={item.call} />;
+            }
             return <ToolCard key={item.call.id} call={item.call} />;
           }
           return (

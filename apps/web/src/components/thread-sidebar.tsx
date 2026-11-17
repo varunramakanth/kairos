@@ -1,6 +1,6 @@
 "use client";
 
-import { MessageSquare, Plus } from "lucide-react";
+import { CalendarClock, MessageSquare, Plus } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
@@ -40,6 +40,19 @@ export function ThreadSidebar() {
           New
         </Link>
       </div>
+      <div className="px-2 pb-2">
+        <Link
+          href="/tasks"
+          className={cn(
+            "flex items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-muted",
+            pathname.startsWith("/tasks") && "bg-muted font-medium",
+          )}
+        >
+          <CalendarClock className="size-3.5 text-muted-foreground" />
+          Tasks &amp; watches
+        </Link>
+      </div>
+      <div className="px-4 pb-1 text-muted-foreground text-xs">Threads</div>
       <nav className="flex-1 overflow-y-auto px-2 pb-4" aria-label="Threads">
         {offline && (
           <p className="px-2 py-1 text-destructive text-xs">

@@ -7,7 +7,9 @@
   "paths": {
     "/health": {
       "get": {
-        "tags": ["meta"],
+        "tags": [
+          "meta"
+        ],
         "summary": "Health",
         "operationId": "health",
         "responses": {
@@ -26,7 +28,9 @@
     },
     "/threads": {
       "get": {
-        "tags": ["threads"],
+        "tags": [
+          "threads"
+        ],
         "summary": "List Threads",
         "operationId": "list_threads",
         "responses": {
@@ -47,7 +51,9 @@
         }
       },
       "post": {
-        "tags": ["threads"],
+        "tags": [
+          "threads"
+        ],
         "summary": "Create Thread",
         "description": "Start a conversation with its first message.",
         "operationId": "create_thread",
@@ -87,7 +93,9 @@
     },
     "/threads/{thread_id}": {
       "get": {
-        "tags": ["threads"],
+        "tags": [
+          "threads"
+        ],
         "summary": "Get Thread",
         "operationId": "get_thread",
         "parameters": [
@@ -127,7 +135,9 @@
     },
     "/threads/{thread_id}/messages": {
       "post": {
-        "tags": ["threads"],
+        "tags": [
+          "threads"
+        ],
         "summary": "Send Message",
         "description": "Add a turn. Returns 409 while the thread's previous run is still going.",
         "operationId": "send_message",
@@ -178,7 +188,9 @@
     },
     "/runs/{run_id}": {
       "get": {
-        "tags": ["runs"],
+        "tags": [
+          "runs"
+        ],
         "summary": "Get Run",
         "operationId": "get_run",
         "parameters": [
@@ -218,7 +230,9 @@
     },
     "/runs/{run_id}/messages": {
       "get": {
-        "tags": ["runs"],
+        "tags": [
+          "runs"
+        ],
         "summary": "Get Run Messages",
         "description": "What the model saw: the run's history in its current epoch.",
         "operationId": "get_run_messages",
@@ -263,7 +277,9 @@
     },
     "/runs/{run_id}/events": {
       "get": {
-        "tags": ["runs"],
+        "tags": [
+          "runs"
+        ],
         "summary": "Stream Run Events",
         "description": "Server-sent events for one run: stored events after ``after`` (or the\n``Last-Event-ID`` header), then live events until the run stops.",
         "operationId": "stream_run_events",
@@ -330,7 +346,9 @@
                       "minimum": 0
                     }
                   },
-                  "required": ["data"]
+                  "required": [
+                    "data"
+                  ]
                 }
               }
             }
@@ -350,7 +368,9 @@
     },
     "/blobs/{blob_id}": {
       "get": {
-        "tags": ["runs"],
+        "tags": [
+          "runs"
+        ],
         "summary": "Get Blob",
         "description": "The full text of a tool result that was truncated for the model.",
         "operationId": "get_blob",
@@ -388,10 +408,335 @@
           }
         }
       }
+    },
+    "/jobs": {
+      "get": {
+        "tags": [
+          "jobs"
+        ],
+        "summary": "List Jobs",
+        "operationId": "list_jobs",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/JobSummary"
+                  },
+                  "type": "array",
+                  "title": "Response List Jobs"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "jobs"
+        ],
+        "summary": "Create Job",
+        "description": "Create a job from the UI. It is active at once: the user is the one asking.",
+        "operationId": "create_job",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/JobSpec"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Job"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/jobs/pause-all": {
+      "post": {
+        "tags": [
+          "jobs"
+        ],
+        "summary": "Pause All Jobs",
+        "description": "The kill switch: pause every active job.",
+        "operationId": "pause_all_jobs",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PausedJobs"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/jobs/{job_id}": {
+      "get": {
+        "tags": [
+          "jobs"
+        ],
+        "summary": "Get Job",
+        "operationId": "get_job",
+        "parameters": [
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Job Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobDetail"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "jobs"
+        ],
+        "summary": "Update Job",
+        "operationId": "update_job",
+        "parameters": [
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Job Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/JobPatch"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Job"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/jobs/{job_id}/confirm": {
+      "post": {
+        "tags": [
+          "jobs"
+        ],
+        "summary": "Confirm Job",
+        "description": "Activate a job the agent proposed.",
+        "operationId": "confirm_job",
+        "parameters": [
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Job Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Job"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/jobs/{job_id}/run": {
+      "post": {
+        "tags": [
+          "jobs"
+        ],
+        "summary": "Run Job Now",
+        "description": "Fire an active job at the next scheduler tick instead of waiting.",
+        "operationId": "run_job_now",
+        "parameters": [
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Job Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Job"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
     "schemas": {
+      "Above": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "const": "above",
+            "title": "Kind",
+            "default": "above"
+          },
+          "threshold": {
+            "type": "number",
+            "title": "Threshold"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "threshold"
+        ],
+        "title": "Above"
+      },
+      "Alert": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "job_id": {
+            "type": "string",
+            "title": "Job Id"
+          },
+          "run_id": {
+            "type": "string",
+            "title": "Run Id"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message"
+          },
+          "dedupe_key": {
+            "type": "string",
+            "title": "Dedupe Key"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "job_id",
+          "run_id",
+          "message",
+          "dedupe_key",
+          "created_at"
+        ],
+        "title": "Alert"
+      },
       "ApprovalRequested": {
         "properties": {
           "run_id": {
@@ -428,8 +773,35 @@
         },
         "additionalProperties": false,
         "type": "object",
-        "required": ["run_id", "ts", "seq", "tool_call_id", "name", "reason"],
+        "required": [
+          "run_id",
+          "ts",
+          "seq",
+          "tool_call_id",
+          "name",
+          "reason"
+        ],
         "title": "ApprovalRequested"
+      },
+      "Below": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "const": "below",
+            "title": "Kind",
+            "default": "below"
+          },
+          "threshold": {
+            "type": "number",
+            "title": "Threshold"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "threshold"
+        ],
+        "title": "Below"
       },
       "Blob": {
         "properties": {
@@ -444,7 +816,10 @@
         },
         "additionalProperties": false,
         "type": "object",
-        "required": ["id", "content"],
+        "required": [
+          "id",
+          "content"
+        ],
         "title": "Blob"
       },
       "BudgetSpent": {
@@ -507,8 +882,33 @@
         },
         "additionalProperties": false,
         "type": "object",
-        "required": ["run_id", "ts", "seq", "spent"],
+        "required": [
+          "run_id",
+          "ts",
+          "seq",
+          "spent"
+        ],
         "title": "BudgetUpdated"
+      },
+      "Changed": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "const": "changed",
+            "title": "Kind",
+            "default": "changed"
+          },
+          "min_delta": {
+            "type": "number",
+            "minimum": 0.0,
+            "title": "Min Delta",
+            "default": 0.0
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "Changed",
+        "description": "The value moved by at least ``min_delta`` since the previous observation."
       },
       "CheckpointWritten": {
         "properties": {
@@ -542,8 +942,60 @@
         },
         "additionalProperties": false,
         "type": "object",
-        "required": ["run_id", "ts", "step", "through_seq"],
+        "required": [
+          "run_id",
+          "ts",
+          "step",
+          "through_seq"
+        ],
         "title": "CheckpointWritten"
+      },
+      "Condition": {
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/Below"
+          },
+          {
+            "$ref": "#/components/schemas/Above"
+          },
+          {
+            "$ref": "#/components/schemas/Contains"
+          },
+          {
+            "$ref": "#/components/schemas/Changed"
+          }
+        ],
+        "discriminator": {
+          "propertyName": "kind",
+          "mapping": {
+            "above": "#/components/schemas/Above",
+            "below": "#/components/schemas/Below",
+            "changed": "#/components/schemas/Changed",
+            "contains": "#/components/schemas/Contains"
+          }
+        }
+      },
+      "Contains": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "const": "contains",
+            "title": "Kind",
+            "default": "contains"
+          },
+          "text": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Text"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "text"
+        ],
+        "title": "Contains",
+        "description": "The observed text contains ``text`` (case-insensitive)."
       },
       "ContentBlock": {
         "oneOf": [
@@ -636,6 +1088,33 @@
         "title": "ContextCompacted",
         "description": "The context grew too large and was replaced by a summary (a new epoch).\n\nThe previous epoch's messages are kept in full as ``archive_blob_id``."
       },
+      "CronSchedule": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "const": "cron",
+            "title": "Kind",
+            "default": "cron"
+          },
+          "expression": {
+            "type": "string",
+            "title": "Expression",
+            "description": "Five-field cron, e.g. '0 8 * * mon-fri'."
+          },
+          "timezone": {
+            "type": "string",
+            "title": "Timezone",
+            "default": "America/Toronto"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "expression"
+        ],
+        "title": "CronSchedule",
+        "description": "Standard five-field cron, evaluated in local wall-clock time of ``timezone``."
+      },
       "HTTPValidationError": {
         "properties": {
           "detail": {
@@ -662,15 +1141,384 @@
         },
         "additionalProperties": false,
         "type": "object",
-        "required": ["status", "version"],
+        "required": [
+          "status",
+          "version"
+        ],
         "title": "Health"
+      },
+      "IntervalSchedule": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "const": "interval",
+            "title": "Kind",
+            "default": "interval"
+          },
+          "every_seconds": {
+            "type": "integer",
+            "minimum": 300.0,
+            "title": "Every Seconds",
+            "description": "At least 300 (five minutes)."
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "every_seconds"
+        ],
+        "title": "IntervalSchedule",
+        "description": "Every N seconds of elapsed time (daylight saving does not affect it)."
+      },
+      "Job": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "spec": {
+            "$ref": "#/components/schemas/JobSpec"
+          },
+          "status": {
+            "$ref": "#/components/schemas/JobStatus"
+          },
+          "next_run_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Run At"
+          },
+          "last_run_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Run At"
+          },
+          "consecutive_failures": {
+            "type": "integer",
+            "title": "Consecutive Failures"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "spec",
+          "status",
+          "next_run_at",
+          "last_run_at",
+          "consecutive_failures",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "Job"
+      },
+      "JobDetail": {
+        "properties": {
+          "job": {
+            "$ref": "#/components/schemas/Job"
+          },
+          "runs": {
+            "items": {
+              "$ref": "#/components/schemas/JobRun"
+            },
+            "type": "array",
+            "title": "Runs"
+          },
+          "observations": {
+            "items": {
+              "$ref": "#/components/schemas/StoredObservation"
+            },
+            "type": "array",
+            "title": "Observations"
+          },
+          "alerts": {
+            "items": {
+              "$ref": "#/components/schemas/Alert"
+            },
+            "type": "array",
+            "title": "Alerts"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "job",
+          "runs",
+          "observations",
+          "alerts"
+        ],
+        "title": "JobDetail"
+      },
+      "JobKind": {
+        "type": "string",
+        "enum": [
+          "task",
+          "watch"
+        ],
+        "title": "JobKind"
+      },
+      "JobPatch": {
+        "properties": {
+          "spec": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/JobSpec"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "active",
+                  "paused",
+                  "deleted"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "JobPatch",
+        "description": "Change a job's definition, its status, or both."
+      },
+      "JobRun": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "job_id": {
+            "type": "string",
+            "title": "Job Id"
+          },
+          "run_id": {
+            "type": "string",
+            "title": "Run Id"
+          },
+          "scheduled_for": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Scheduled For"
+          },
+          "status": {
+            "$ref": "#/components/schemas/JobRunStatus"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "finished_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finished At"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "job_id",
+          "run_id",
+          "scheduled_for",
+          "status",
+          "error",
+          "created_at",
+          "finished_at"
+        ],
+        "title": "JobRun",
+        "description": "One firing of a job and the agent run it started."
+      },
+      "JobRunStatus": {
+        "type": "string",
+        "enum": [
+          "started",
+          "succeeded",
+          "failed"
+        ],
+        "title": "JobRunStatus"
+      },
+      "JobSpec": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Name"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/JobKind"
+          },
+          "schedule": {
+            "$ref": "#/components/schemas/Schedule"
+          },
+          "prompt": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 20000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Prompt",
+            "description": "For tasks: what the agent should do."
+          },
+          "watch": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/WatchSpec"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "expires_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expires At"
+          },
+          "model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "name",
+          "kind",
+          "schedule"
+        ],
+        "title": "JobSpec",
+        "description": "The editable part of a job."
+      },
+      "JobStatus": {
+        "type": "string",
+        "enum": [
+          "pending_confirmation",
+          "active",
+          "paused",
+          "completed",
+          "expired",
+          "deleted"
+        ],
+        "title": "JobStatus"
+      },
+      "JobSummary": {
+        "properties": {
+          "job": {
+            "$ref": "#/components/schemas/Job"
+          },
+          "last_run": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/JobRun"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "recent_values": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array",
+            "title": "Recent Values"
+          },
+          "alert_count": {
+            "type": "integer",
+            "title": "Alert Count"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "job",
+          "last_run",
+          "recent_values",
+          "alert_count"
+        ],
+        "title": "JobSummary",
+        "description": "A row of the Tasks page."
       },
       "JsonValue": {},
       "Message": {
         "properties": {
           "role": {
             "type": "string",
-            "enum": ["user", "assistant"],
+            "enum": [
+              "user",
+              "assistant"
+            ],
             "title": "Role"
           },
           "content": {
@@ -683,7 +1531,10 @@
         },
         "additionalProperties": false,
         "type": "object",
-        "required": ["role", "content"],
+        "required": [
+          "role",
+          "content"
+        ],
         "title": "Message"
       },
       "ModelCallFinished": {
@@ -743,7 +1594,13 @@
       },
       "ModelStopReason": {
         "type": "string",
-        "enum": ["end_turn", "tool_use", "max_tokens", "refusal", "other"],
+        "enum": [
+          "end_turn",
+          "tool_use",
+          "max_tokens",
+          "refusal",
+          "other"
+        ],
         "title": "ModelStopReason"
       },
       "ModelStreamReset": {
@@ -778,7 +1635,12 @@
         },
         "additionalProperties": false,
         "type": "object",
-        "required": ["run_id", "ts", "step", "reason"],
+        "required": [
+          "run_id",
+          "ts",
+          "step",
+          "reason"
+        ],
         "title": "ModelStreamReset",
         "description": "The model stream failed and is being retried. Discard deltas shown for this step."
       },
@@ -804,8 +1666,86 @@
         },
         "additionalProperties": false,
         "type": "object",
-        "required": ["text"],
+        "required": [
+          "text"
+        ],
         "title": "NewMessage"
+      },
+      "Observation": {
+        "properties": {
+          "found": {
+            "type": "boolean",
+            "title": "Found"
+          },
+          "value": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Value"
+          },
+          "unit": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unit"
+          },
+          "text": {
+            "type": "string",
+            "maxLength": 2000,
+            "title": "Text",
+            "default": ""
+          },
+          "source_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Url"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "found"
+        ],
+        "title": "Observation",
+        "description": "What a watch run saw. ``value`` is set when the extract is a number."
+      },
+      "OneShotSchedule": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "const": "one_shot",
+            "title": "Kind",
+            "default": "one_shot"
+          },
+          "at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "At"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "at"
+        ],
+        "title": "OneShotSchedule",
+        "description": "Once, at an exact instant."
       },
       "OpaqueBlock": {
         "properties": {
@@ -833,13 +1773,34 @@
         },
         "additionalProperties": false,
         "type": "object",
-        "required": ["provider", "kind", "data"],
+        "required": [
+          "provider",
+          "kind",
+          "data"
+        ],
         "title": "OpaqueBlock",
         "description": "A provider-native block the harness does not interpret but must replay verbatim.\n\nThinking blocks are the main case: current Claude models reject a history in\nwhich they were altered or dropped selectively. ``data`` is the provider's own\nJSON for the block; ``provider`` says which provider can read it back."
       },
+      "PausedJobs": {
+        "properties": {
+          "paused": {
+            "type": "integer",
+            "title": "Paused"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "paused"
+        ],
+        "title": "PausedJobs"
+      },
       "Provenance": {
         "type": "string",
-        "enum": ["trusted", "untrusted"],
+        "enum": [
+          "trusted",
+          "untrusted"
+        ],
         "title": "Provenance",
         "description": "Where content came from, which decides whether it may be treated as instructions.\n\n``UNTRUSTED`` content (web pages, email, documents, third-party APIs) is data.\nThe harness wraps it in delimited blocks before the model sees it."
       },
@@ -856,7 +1817,10 @@
         },
         "additionalProperties": false,
         "type": "object",
-        "required": ["thread_id", "run_id"],
+        "required": [
+          "thread_id",
+          "run_id"
+        ],
         "title": "RunAccepted"
       },
       "RunDetail": {
@@ -874,7 +1838,10 @@
         },
         "additionalProperties": false,
         "type": "object",
-        "required": ["run", "events"],
+        "required": [
+          "run",
+          "events"
+        ],
         "title": "RunDetail",
         "description": "A run with its durable event log: enough to render the turn or its trace."
       },
@@ -1019,7 +1986,14 @@
         },
         "additionalProperties": false,
         "type": "object",
-        "required": ["run_id", "ts", "seq", "stop_reason", "usage", "cost_usd"],
+        "required": [
+          "run_id",
+          "ts",
+          "seq",
+          "stop_reason",
+          "usage",
+          "cost_usd"
+        ],
         "title": "RunFinished",
         "description": "The loop stopped. For pauses the run can continue later; otherwise it is final."
       },
@@ -1055,7 +2029,13 @@
         },
         "additionalProperties": false,
         "type": "object",
-        "required": ["run_id", "ts", "seq", "attempt", "from_step"],
+        "required": [
+          "run_id",
+          "ts",
+          "seq",
+          "attempt",
+          "from_step"
+        ],
         "title": "RunResumed",
         "description": "A process picked up an existing run from its checkpoint."
       },
@@ -1091,12 +2071,23 @@
         },
         "additionalProperties": false,
         "type": "object",
-        "required": ["run_id", "ts", "seq", "model", "input"],
+        "required": [
+          "run_id",
+          "ts",
+          "seq",
+          "model",
+          "input"
+        ],
         "title": "RunStarted"
       },
       "RunStatus": {
         "type": "string",
-        "enum": ["queued", "running", "paused", "finished"],
+        "enum": [
+          "queued",
+          "running",
+          "paused",
+          "finished"
+        ],
         "title": "RunStatus"
       },
       "RunSummary": {
@@ -1186,6 +2177,27 @@
         "title": "RunSummary",
         "description": "One turn: the user's input and how the run that answered it ended."
       },
+      "Schedule": {
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/CronSchedule"
+          },
+          {
+            "$ref": "#/components/schemas/IntervalSchedule"
+          },
+          {
+            "$ref": "#/components/schemas/OneShotSchedule"
+          }
+        ],
+        "discriminator": {
+          "propertyName": "kind",
+          "mapping": {
+            "cron": "#/components/schemas/CronSchedule",
+            "interval": "#/components/schemas/IntervalSchedule",
+            "one_shot": "#/components/schemas/OneShotSchedule"
+          }
+        }
+      },
       "StepFinished": {
         "properties": {
           "run_id": {
@@ -1214,7 +2226,12 @@
         },
         "additionalProperties": false,
         "type": "object",
-        "required": ["run_id", "ts", "seq", "step"],
+        "required": [
+          "run_id",
+          "ts",
+          "seq",
+          "step"
+        ],
         "title": "StepFinished",
         "description": "The step's model call and its whole tool batch are done and checkpointed."
       },
@@ -1246,7 +2263,12 @@
         },
         "additionalProperties": false,
         "type": "object",
-        "required": ["run_id", "ts", "seq", "step"],
+        "required": [
+          "run_id",
+          "ts",
+          "seq",
+          "step"
+        ],
         "title": "StepStarted"
       },
       "StopReason": {
@@ -1263,6 +2285,45 @@
         "title": "StopReason",
         "description": "Why the loop stopped. Every exit from the loop names exactly one."
       },
+      "StoredObservation": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "job_id": {
+            "type": "string",
+            "title": "Job Id"
+          },
+          "run_id": {
+            "type": "string",
+            "title": "Run Id"
+          },
+          "observation": {
+            "$ref": "#/components/schemas/Observation"
+          },
+          "matched": {
+            "type": "boolean",
+            "title": "Matched"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "job_id",
+          "run_id",
+          "observation",
+          "matched",
+          "created_at"
+        ],
+        "title": "StoredObservation"
+      },
       "TextBlock": {
         "properties": {
           "type": {
@@ -1278,7 +2339,9 @@
         },
         "additionalProperties": false,
         "type": "object",
-        "required": ["text"],
+        "required": [
+          "text"
+        ],
         "title": "TextBlock"
       },
       "TextMessageDelta": {
@@ -1313,7 +2376,12 @@
         },
         "additionalProperties": false,
         "type": "object",
-        "required": ["run_id", "ts", "message_id", "delta"],
+        "required": [
+          "run_id",
+          "ts",
+          "message_id",
+          "delta"
+        ],
         "title": "TextMessageDelta"
       },
       "TextMessageEnd": {
@@ -1348,7 +2416,13 @@
         },
         "additionalProperties": false,
         "type": "object",
-        "required": ["run_id", "ts", "seq", "message_id", "text"],
+        "required": [
+          "run_id",
+          "ts",
+          "seq",
+          "message_id",
+          "text"
+        ],
         "title": "TextMessageEnd"
       },
       "TextMessageStart": {
@@ -1379,7 +2453,11 @@
         },
         "additionalProperties": false,
         "type": "object",
-        "required": ["run_id", "ts", "message_id"],
+        "required": [
+          "run_id",
+          "ts",
+          "message_id"
+        ],
         "title": "TextMessageStart"
       },
       "Thread": {
@@ -1405,7 +2483,12 @@
         },
         "additionalProperties": false,
         "type": "object",
-        "required": ["id", "title", "created_at", "updated_at"],
+        "required": [
+          "id",
+          "title",
+          "created_at",
+          "updated_at"
+        ],
         "title": "Thread"
       },
       "ThreadDetail": {
@@ -1423,7 +2506,10 @@
         },
         "additionalProperties": false,
         "type": "object",
-        "required": ["thread", "runs"],
+        "required": [
+          "thread",
+          "runs"
+        ],
         "title": "ThreadDetail"
       },
       "ToolCallArgs": {
@@ -1458,7 +2544,12 @@
         },
         "additionalProperties": false,
         "type": "object",
-        "required": ["run_id", "ts", "tool_call_id", "delta"],
+        "required": [
+          "run_id",
+          "ts",
+          "tool_call_id",
+          "delta"
+        ],
         "title": "ToolCallArgs"
       },
       "ToolCallEnd": {
@@ -1500,7 +2591,14 @@
         },
         "additionalProperties": false,
         "type": "object",
-        "required": ["run_id", "ts", "seq", "tool_call_id", "name", "input"],
+        "required": [
+          "run_id",
+          "ts",
+          "seq",
+          "tool_call_id",
+          "name",
+          "input"
+        ],
         "title": "ToolCallEnd",
         "description": "The model finished writing the call. ``input`` is the complete, parsed input."
       },
@@ -1612,7 +2710,12 @@
         },
         "additionalProperties": false,
         "type": "object",
-        "required": ["run_id", "ts", "tool_call_id", "name"],
+        "required": [
+          "run_id",
+          "ts",
+          "tool_call_id",
+          "name"
+        ],
         "title": "ToolCallStart"
       },
       "ToolCallUncertain": {
@@ -1647,7 +2750,13 @@
         },
         "additionalProperties": false,
         "type": "object",
-        "required": ["run_id", "ts", "seq", "tool_call_id", "name"],
+        "required": [
+          "run_id",
+          "ts",
+          "seq",
+          "tool_call_id",
+          "name"
+        ],
         "title": "ToolCallUncertain",
         "description": "A non-idempotent call was interrupted; its outcome is unknown. The run pauses."
       },
@@ -1679,7 +2788,10 @@
         },
         "additionalProperties": false,
         "type": "object",
-        "required": ["tool_use_id", "content"],
+        "required": [
+          "tool_use_id",
+          "content"
+        ],
         "title": "ToolResultBlock",
         "description": "The outcome of a tool call, exactly as the model saw it.\n\n``content`` is already truncated and, for untrusted tools, already wrapped."
       },
@@ -1709,7 +2821,11 @@
         },
         "additionalProperties": false,
         "type": "object",
-        "required": ["id", "name", "input"],
+        "required": [
+          "id",
+          "name",
+          "input"
+        ],
         "title": "ToolUseBlock",
         "description": "The model asking for a tool to be called."
       },
@@ -1774,8 +2890,49 @@
           }
         },
         "type": "object",
-        "required": ["loc", "msg", "type"],
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
         "title": "ValidationError"
+      },
+      "WatchSpec": {
+        "properties": {
+          "target": {
+            "type": "string",
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Target",
+            "description": "A URL, or a search query, describing where to look."
+          },
+          "extract": {
+            "type": "string",
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Extract",
+            "description": "What to read from the target, e.g. 'lowest round-trip fare in CAD'."
+          },
+          "condition": {
+            "$ref": "#/components/schemas/Condition"
+          },
+          "cooldown_seconds": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Cooldown Seconds",
+            "description": "Minimum time between two alerts.",
+            "default": 21600
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "target",
+          "extract",
+          "condition"
+        ],
+        "title": "WatchSpec",
+        "description": "What to look at, what to extract, and when to raise an alert."
       }
     }
   }

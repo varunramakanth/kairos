@@ -5,6 +5,7 @@ description = "Action risk classification, approval rules, budgets and the kill 
 requires-python = ">=3.12"
 dependencies = [
     "kairos-domain",
+    "kairos-harness",
 ]
 
 [build-system]
@@ -13,3 +14,4 @@ build-backend = "uv_build"
 
 [tool.uv.sources]
 kairos-domain = { workspace = true }
+kairos-harness = { workspace = true }

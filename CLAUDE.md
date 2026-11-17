@@ -15,6 +15,9 @@ Kairos is an always-on personal agent. `PLAN.md` is the source of truth for scop
 | `just typecheck` | pyright strict + `tsc --noEmit` |
 | `just test [pytest args]` | Offline tests (integration tests start Postgres via testcontainers; skipped without Docker) |
 | `just migrate` / `just worker` | Migrate the local DB / run the durable worker |
+| `just api` / `just web` | API on :8000 with an embedded worker / Next.js on :3000 |
+| `just api-demo` | API serving a scripted demo cassette: no API key, no cost |
+| `just gen-client` | Regenerate `apps/web/openapi.json` and the TS client after any API or event model change |
 | `just record-cassettes` | Rebuild eval cassettes |
 | `just evals` | Eval suites (offline) |
 | `just test-live` | Tests marked `live`, with `LIVE=1`. Costs money; ask first |
@@ -24,7 +27,7 @@ Kairos is an always-on personal agent. `PLAN.md` is the source of truth for scop
 
 - `packages/kairos_*` — Python libraries (uv workspace members, `src/` layout, each with `py.typed`).
 - `services/{api,worker,browser}` — Python entrypoints (`kairos_api`, `kairos_worker`, `kairos_browser`).
-- `apps/web` — Next.js UI. The only TypeScript in the repo.
+- `apps/web` — Next.js UI. The only TypeScript in the repo. `src/client` is generated; never edit it.
 - `infra/` — `compose.yaml` for local dev; CDK (Python) arrives in M8.
 - `tests/` — cross-package and integration tests. Unit tests live in each member's `tests/`.
 

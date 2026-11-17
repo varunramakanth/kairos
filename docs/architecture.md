@@ -40,6 +40,8 @@ flowchart BT
   notify[kairos_notify] --> domain
   db[kairos_db] --> domain
   api[services/api] --> domain
+  api --> db
+  api --> worker
   worker[services/worker] --> harness
   worker --> providers
   worker --> tools
@@ -68,9 +70,10 @@ sequenceDiagram
     W->>M: stream model call
     M-->>W: text + tool calls
     W->>W: run tools in parallel
-    W->>DB: append run_events, checkpoint (lease-guarded)
-    DB-->>API: new events
-    API-->>UI: SSE
+    W->>DB: append run_events, checkpoint (lease-guarded), NOTIFY on commit
+    W-->>DB: NOTIFY text and tool-argument deltas (not stored)
+    DB-->>API: LISTEN: new events
+    API-->>UI: SSE (id = seq)
   end
   W->>DB: finish run, release lease
 ```
@@ -84,3 +87,5 @@ sequenceDiagram
 | [003](adr/003-durable-queue.md) | Postgres leases with a fencing token, written by hand |
 | [004](adr/004-repository-layout.md) | One monorepo; `kairos_evals` stays extractable |
 | [005](adr/005-cassettes.md) | Cassettes at the provider boundary and at HTTP level |
+| [007](adr/007-live-events.md) | Live events from worker to API over Postgres `LISTEN/NOTIFY` |
+| [008](adr/008-web-search.md) | Web search as a client-side tool on Tavily; own `web_fetch` with an SSRF guard |

@@ -148,8 +148,8 @@ This is where the codebase earns its "state of the art" label. It should be a cl
 
 | Tool | Notes |
 |---|---|
-| `web_search` | Pluggable: Brave / Tavily / Exa. Return sources with URLs |
-| `web_fetch` | Readability extraction; respect robots; cache |
+| `web_search` | Tavily (ADR-008); behind one tool name so the provider can change. Return sources with URLs |
+| `web_fetch` | Main-text extraction (trafilatura) to Markdown with links; refuses non-public addresses on every redirect hop (ADR-008). Robots and caching later |
 | `browser.*` | Navigate, read, screenshot, extract, via the `services/browser` service; "take control" view in the UI later |
 | `email.send` / `email.draft` | Gmail API (OAuth) or SES. **Policy:** sending to self is auto; sending to anyone else needs approval |
 | `email.search` / `email.read` | Gmail read-only scope first |
@@ -336,7 +336,7 @@ Worth evaluating in an ADR: **Bedrock AgentCore** (Runtime, Memory, Gateway, Obs
 |---|---|---|
 | **M0** | Scaffold | uv workspace + `apps/web` (pnpm), `justfile`, CI (ruff, pyright, pytest; Biome, tsc for web), docker compose (Postgres+pgvector, Langfuse), `CLAUDE.md`, ADR-001..005 written |
 | **M1** | Harness core | Async agent loop with streaming, tool registry, hooks, Anthropic + Bedrock providers, prompt caching, tool-result truncation, untrusted-content envelope, durable runs with checkpoint/resume on Postgres leases, budgets, OTel traces visible in Langfuse. pytest with cassettes. Thin eval slice: `Trace` model, OTel-JSON trace source and two deterministic metrics in `kairos_evals` |
-| **M2** | API + Chat UI | FastAPI SSE streaming, OpenAPI → generated TS client, Next.js chat with tool cards, threads, run trace viewer, compaction, visible plan checklist. Can ask "what's new in agent evals?" and get a cited answer via web_search + web_fetch |
+| **M2** | API + Chat UI | FastAPI SSE streaming, OpenAPI → generated TS client, Next.js chat with tool cards, threads, run trace viewer, compaction, visible plan checklist. Can ask "what's new in agent evals?" and get a cited answer via web_search + web_fetch. *Built 2026-11-17 (ADR-007, ADR-008); the live cited-answer check waits on API keys.* |
 | **M3** | Scheduler + watches | Cron/interval/one-shot/watch with leases, DST-safe; NL → job creation with confirmation; Tasks UI with history + value sparkline; fake-clock tests |
 | **M4** | Notify + email + approvals | Email to self (SES/Gmail), web push, policy engine, approval inbox, audit log. Weekly-digest job works end to end |
 | **M5** | Eval framework v1 | `kairos-evals` with workflow, 3-layer metrics, golden datasets (≥50 cases for intent/tool/scheduling), simulator, S3 + dashboard, CI regression gate |

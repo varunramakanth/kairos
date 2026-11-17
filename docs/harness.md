@@ -79,6 +79,12 @@ sequenceDiagram
   end
 ```
 
+## Threads and compaction
+
+- A thread is a sequence of runs. When a message arrives, the API locks the thread, takes the previous run's messages up to its last complete assistant turn, and passes them as `RunRequest.history`. The loop replays them unchanged before the new input, so thinking blocks stay valid and the prompt cache keeps hitting across turns.
+- Before each model call the loop estimates the prompt size. Above `compact_at_prompt_tokens` (150k by default) it asks the model for a summary, archives the old messages as a blob, and starts a new epoch whose first user message is the summary plus the user's latest words. The summary request reuses the same prefix, so it is mostly served from cache. A `context_compacted` event records it.
+- Facts that came from untrusted tool results survive compaction as part of the summary. The summary block says they are data, not instructions; the M7 injection suite should cover this path.
+
 ## Extension points
 
 - **Tools:** decorate an async function whose first parameter is a Pydantic model with `@tool(risk=..., idempotent=..., provenance=...)` and register it.
@@ -92,6 +98,8 @@ just dev && just migrate
 uv run kairos enqueue "What time is it in Toronto?"
 just worker
 ```
+
+For the chat UI, run `just api` and `just web` (or `just api-demo` with no API key).
 
 `uv run kairos run "..."` runs once in memory with no database. Both need Anthropic credentials (or `KAIROS_PROVIDER=bedrock` with AWS credentials). `--replay FILE` serves model calls from a cassette instead.
 

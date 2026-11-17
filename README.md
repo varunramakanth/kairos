@@ -2,7 +2,7 @@
 
 An always-on personal agent: it chats, runs scheduled jobs and watches, acts through tools behind an approval gate, remembers, and records a trace of every run that can be inspected, replayed and evaluated.
 
-**Status:** M1 (harness core). The agent loop, both providers, durable runs on Postgres and tracing work; there is no API or UI yet. See [`docs/harness.md`](docs/harness.md). See [`PLAN.md`](PLAN.md) for the full spec and milestones, and [`docs/adr/`](docs/adr/) for the decisions made so far.
+**Status:** M2 (API and chat UI). Chat in threads with live streaming, tool cards, a plan checklist, web search and fetch, and a trace viewer for every run, on top of the M1 harness (durable runs on Postgres, both providers, tracing). See [`docs/harness.md`](docs/harness.md). See [`PLAN.md`](PLAN.md) for the full spec and milestones, and [`docs/adr/`](docs/adr/) for the decisions made so far.
 
 ## Quick start
 
@@ -11,9 +11,18 @@ Requirements: [uv](https://docs.astral.sh/uv/), [just](https://just.systems/), N
 ```bash
 just sync      # install Python and web dependencies
 just dev       # start Postgres + pgvector
+just migrate   # create the tables
 just check     # lint, typecheck, tests, evals
-just web       # placeholder UI on http://localhost:3000
 ```
+
+To chat, put `ANTHROPIC_API_KEY` (and optionally `TAVILY_API_KEY` for web search) in `.env`, then run these in two terminals:
+
+```bash
+just api       # API on http://localhost:8000, with an embedded worker
+just web       # chat UI on http://localhost:3000
+```
+
+No key yet? `just api-demo` instead of `just api` serves a scripted conversation; click the "Plan a three-step comparison…" example.
 
 `just dev-obs` also starts a local Langfuse on http://localhost:3100. Copy `.env.example` to `.env` to override local defaults.
 

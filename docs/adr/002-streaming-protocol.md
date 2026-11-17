@@ -29,6 +29,13 @@ Define our own SSE stream. `RunEvent` is a Pydantic discriminated union in `kair
 - **Durability:** every event is a row in `run_events` with a monotonic `seq` per run. The SSE `id` is that `seq`. A client that reconnects sends `Last-Event-ID` and receives everything after it. Watching a background run after the fact uses the same code path as watching a live one.
 - **Typing in OpenAPI:** FastAPI does not describe SSE payloads on its own. The `RunEvent` union is registered as a schema component and referenced from the stream route's `text/event-stream` response, so the generated TypeScript client gets the union type.
 
+## Implementation notes (M2)
+
+- FastAPI 0.135 and later document SSE routes natively: annotating the route as `AsyncIterable[RunEvent]` puts an `itemSchema` whose `data` references `RunEvent` into the `text/event-stream` response, so no manual schema registration is needed. Frames are sent as `ServerSentEvent` so durable events carry `id: <seq>`.
+- The generated TypeScript client has an SSE function (`streamRunEvents`) that reconnects with `Last-Event-ID`, but it types each payload as `unknown`. The UI narrows it with a small `isRunEvent` guard and otherwise uses the generated `RunEvent` union.
+- The plan checklist is not a separate event: it is the `update_plan` tool's `tool_call_end` input, rendered as a checklist.
+- Ephemeral events reach the API through Postgres `LISTEN/NOTIFY` (ADR-007).
+
 ## Consequences
 
 - No drop-in CopilotKit or other AG-UI clients until the mapping layer exists.

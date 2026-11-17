@@ -464,6 +464,59 @@ async def test_approval_pauses_the_run_and_resume_runs_the_tool() -> None:
     assert finished(events).stop_reason is StopReason.COMPLETED
 
 
+async def test_a_human_approval_lets_the_call_run_while_the_policy_still_asks() -> None:
+    checkpointer = InMemoryCheckpointer()
+    gate = Gate(RequireApproval(reason="side effect"))
+    tools = [(simple_spec("echo", risk="write_external"), echo)]
+    first = Harness(
+        [tool_turn(("t1", "echo", {"q": "x"}))], tools, hooks=gate, checkpointer=checkpointer
+    )
+    events = await first.run()
+    (asked,) = (e for e in events if isinstance(e, ApprovalRequested))
+    assert asked.input == {"q": "x"}
+    assert asked.risk.value == "write_external"
+
+    resumed = Harness([text_turn("done")], tools, hooks=gate, checkpointer=checkpointer)
+    events = await resumed.run(context=RunContext(approved=frozenset({"t1"})))
+    assert [e.output for e in events if isinstance(e, ToolCallResult)] == ["echo:x"]
+    assert finished(events).stop_reason is StopReason.COMPLETED
+
+
+async def test_a_declined_call_is_reported_to_the_model_and_never_runs() -> None:
+    checkpointer = InMemoryCheckpointer()
+    gate = Gate(RequireApproval(reason="side effect"))
+    tools = [(simple_spec("echo"), echo)]
+    await Harness(
+        [tool_turn(("t1", "echo", {}))], tools, hooks=gate, checkpointer=checkpointer
+    ).run()
+
+    resumed = Harness([text_turn("ok, I won't")], tools, hooks=gate, checkpointer=checkpointer)
+    events = await resumed.run(context=RunContext(denied={"t1": "not today"}))
+    (result,) = (e for e in events if isinstance(e, ToolCallResult))
+    assert result.is_error
+    assert result.output == "The user declined this action. Note: not today"
+    assert resumed.tools.calls == []
+    assert finished(events).stop_reason is StopReason.COMPLETED
+
+
+async def test_a_deny_beats_a_human_approval() -> None:
+    checkpointer = InMemoryCheckpointer()
+    tools = [(simple_spec("echo"), echo)]
+    await Harness(
+        [tool_turn(("t1", "echo", {}))],
+        tools,
+        hooks=Gate(RequireApproval(reason="r")),
+        checkpointer=checkpointer,
+    ).run()
+    switched_off = Harness(
+        [text_turn("ok")], tools, hooks=Gate(Deny(reason="kill switch")), checkpointer=checkpointer
+    )
+    events = await switched_off.run(context=RunContext(approved=frozenset({"t1"})))
+    (result,) = (e for e in events if isinstance(e, ToolCallResult))
+    assert result.output == "not allowed: kill switch"
+    assert switched_off.tools.calls == []
+
+
 async def test_hooks_fire_in_order_and_before_model_can_reroute() -> None:
     calls: list[str] = []
 

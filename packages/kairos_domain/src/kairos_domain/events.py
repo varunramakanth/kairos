@@ -16,6 +16,7 @@ from kairos_domain.base import DomainModel
 from kairos_domain.content import Provenance
 from kairos_domain.model import ModelStopReason
 from kairos_domain.run import StopReason
+from kairos_domain.tools import ToolRisk
 from kairos_domain.usage import BudgetSpent, Usage
 
 
@@ -142,10 +143,14 @@ class ToolCallUncertain(DurableEvent):
 
 
 class ApprovalRequested(DurableEvent):
+    """A tool call waits for a human. The run pauses until every such call is decided."""
+
     type: Literal["approval_requested"] = "approval_requested"
     tool_call_id: str
     name: str
     reason: str
+    input: dict[str, JsonValue] = Field(default_factory=dict[str, JsonValue])
+    risk: ToolRisk = ToolRisk.WRITE_SELF
 
 
 class BudgetUpdated(DurableEvent):

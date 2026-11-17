@@ -339,10 +339,18 @@ class AgentLoop:
         # 2. Decide every call before running any, so a batch is all-or-nothing.
         settled: dict[str, ToolOutput] = {}
         runnable: list[tuple[ToolCallRecord, ToolSpec]] = []
-        approvals: list[tuple[ToolCallRecord, str]] = []
+        approvals: list[tuple[ToolCallRecord, ToolSpec, str]] = []
+        context = session.context
         for call in calls:
-            if call.id in session.context.resolutions:
-                settled[call.id] = session.context.resolutions[call.id]
+            if call.id in context.resolutions:
+                settled[call.id] = context.resolutions[call.id]
+                continue
+            if call.id in context.denied:
+                note = context.denied[call.id]
+                settled[call.id] = ToolOutput(
+                    content="The user declined this action." + (f" Note: {note}" if note else ""),
+                    is_error=True,
+                )
                 continue
             spec = specs.get(call.name)
             if spec is None:
@@ -353,15 +361,20 @@ class AgentLoop:
                 settled[call.id] = ToolOutput(
                     content=f"not allowed: {decision.reason}", is_error=True
                 )
-            elif isinstance(decision, RequireApproval):
-                approvals.append((call, decision.reason))
+            elif isinstance(decision, RequireApproval) and call.id not in context.approved:
+                approvals.append((call, spec, decision.reason))
             else:
                 runnable.append((call, spec))
 
         if approvals:
-            for call, reason in approvals:
+            for call, spec, reason in approvals:
                 yield session.durable(
-                    ApprovalRequested, tool_call_id=call.id, name=call.name, reason=reason
+                    ApprovalRequested,
+                    tool_call_id=call.id,
+                    name=call.name,
+                    reason=reason,
+                    input=call.input,
+                    risk=spec.risk,
                 )
             async for event in self._finish(session, StopReason.AWAITING_APPROVAL):
                 yield event

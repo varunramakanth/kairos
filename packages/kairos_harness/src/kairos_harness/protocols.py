@@ -128,6 +128,11 @@ class RunContext:
     """Set to stop the run at the next safe point with ``StopReason.CANCELLED``."""
     resolutions: Mapping[str, ToolOutput] = field(default_factory=dict[str, ToolOutput])
     """Human-supplied outcomes for ``uncertain`` tool calls, keyed by tool call id."""
+    approved: frozenset[str] = frozenset()
+    """Tool call ids a human approved. A ``RequireApproval`` decision for one of
+    these runs the call; a ``Deny`` (policy, kill switch) still wins."""
+    denied: Mapping[str, str] = field(default_factory=dict[str, str])
+    """Tool call ids a human declined, with an optional note for the model."""
 
 
 class Harness(Protocol):

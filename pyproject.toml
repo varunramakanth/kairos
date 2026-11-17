@@ -13,6 +13,7 @@ members = ["packages/*", "services/*"]
 
 [dependency-groups]
 dev = [
+    "httpx2>=2.0",
     "pyright>=1.1.400",
     "pytest>=8.3",
     "pytest-asyncio>=1.0",

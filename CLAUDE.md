@@ -17,6 +17,7 @@ Kairos is an always-on personal agent. `PLAN.md` is the source of truth for scop
 | `just migrate` / `just worker` | Migrate the local DB / run the durable worker |
 | `just api` / `just web` | API on :8000 with an embedded worker / Next.js on :3000 |
 | `just api-demo` | API serving a scripted demo cassette: no API key, no cost |
+| `uv run kairos vapid-keys` | Print a Web Push key pair to paste into `.env` |
 | `just gen-client` | Regenerate `apps/web/openapi.json` and the TS client after any API or event model change |
 | `just record-cassettes` | Rebuild the synthetic eval cassettes (free) |
 | `just record-live [case]` | Re-record live eval cases: real model and web calls. Costs money; ask first |

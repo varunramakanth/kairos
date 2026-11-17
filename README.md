@@ -2,7 +2,7 @@
 
 An always-on personal agent: it chats, runs scheduled jobs and watches, acts through tools behind an approval gate, remembers, and records a trace of every run that can be inspected, replayed and evaluated.
 
-**Status:** M3 (scheduler and watches). Scheduled tasks and watches with DST-safe schedules, alerts with dedupe and cooldown, and a Tasks page; on top of M2 (chat with live streaming, tool cards, web search and fetch, a trace viewer) and the M1 harness (durable runs on Postgres, both providers, tracing). See [`docs/harness.md`](docs/harness.md). See [`PLAN.md`](PLAN.md) for the full spec and milestones, and [`docs/adr/`](docs/adr/) for the decisions made so far.
+**Status:** M4 (approvals and notifications). Every agent action with a side effect waits in an approval inbox; an audit log, a kill switch, email and browser-push notifications, and a weekly digest. On top of M3 (scheduled tasks and watches with alerts), M2 (chat with live streaming, tool cards, web search and fetch, a trace viewer) and the M1 harness (durable runs on Postgres, both providers, tracing). See [`docs/harness.md`](docs/harness.md). See [`PLAN.md`](PLAN.md) for the full spec and milestones, and [`docs/adr/`](docs/adr/) for the decisions made so far.
 
 ## Quick start
 

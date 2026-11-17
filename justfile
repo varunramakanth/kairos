@@ -32,6 +32,16 @@ down:
 web:
     pnpm --dir apps/web dev
 
+# Run the API on http://localhost:8000 with an embedded worker (needs `just dev`)
+api:
+    KAIROS_EMBEDDED_WORKER=1 uv run uvicorn --factory kairos_api.app:create_app --port 8000 --reload
+
+# Same, but the model is a scripted demo cassette: no API key, no cost
+api-demo:
+    KAIROS_EMBEDDED_WORKER=1 KAIROS_PROVIDER=replay KAIROS_MODEL=claude-opus-5-5 \
+      KAIROS_REPLAY_CASSETTE=tests/e2e/cassettes/demo.jsonl TAVILY_API_KEY= \
+      uv run uvicorn --factory kairos_api.app:create_app --port 8000
+
 # Format Python and web code
 fmt:
     uv run ruff format .
@@ -52,6 +62,7 @@ typecheck:
 # Run offline tests (no network; cassettes only). Extra args go to pytest.
 test *args:
     uv run pytest -m "not evals" {{ args }}
+    pnpm --dir apps/web test
 
 # Run live tests against real services (costs money; needs credentials)
 test-live *args:
@@ -73,9 +84,10 @@ migrate:
 worker:
     uv run kairos worker
 
-# Regenerate the TypeScript API client from FastAPI's OpenAPI schema (arrives in M2)
+# Regenerate the TypeScript API client from FastAPI's OpenAPI schema
 gen-client:
-    @echo "gen-client: no API yet; the OpenAPI -> TypeScript client lands in M2." && exit 1
+    uv run python -m kairos_api.openapi apps/web/openapi.json
+    pnpm --dir apps/web gen-client
 
 # Everything CI runs
 check: lint typecheck test evals

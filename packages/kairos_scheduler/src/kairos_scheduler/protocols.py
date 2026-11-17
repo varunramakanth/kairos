@@ -8,6 +8,7 @@ from collections.abc import Callable, Sequence
 from datetime import datetime
 from typing import Protocol
 
+from kairos_domain.governance import DigestData, Notification
 from kairos_domain.jobs import Job, JobSpec, JobStatus
 from kairos_domain.scheduling import Claim, Finished, Firing, Settlement
 
@@ -49,6 +50,21 @@ class SchedulerStore(JobRepository, Protocol):
         """Queue the run and advance the job in one transaction. ``False`` if the
         lease was lost (another scheduler owns the job)."""
         ...
+
+    async def fire_digest(
+        self,
+        claim: Claim,
+        *,
+        job_run_id: str,
+        scheduled_for: datetime,
+        next_run_at: datetime | None,
+        notification: Notification,
+        now: datetime,
+    ) -> bool:
+        """Record a digest firing and queue its notification."""
+        ...
+
+    async def digest_data(self, *, since: datetime, until: datetime) -> DigestData: ...
 
     async def close(self, claim: Claim, status: JobStatus, *, now: datetime) -> bool:
         """End a job without firing it (expired)."""

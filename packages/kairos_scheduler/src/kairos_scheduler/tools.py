@@ -70,6 +70,8 @@ def schedule_tools(
             problems.append("a task needs a prompt")
         if args.kind is JobKind.WATCH and args.watch is None:
             problems.append("a watch needs a watch spec")
+        if args.kind is JobKind.DIGEST:
+            problems.append("the digest is built in; use schedule_set_status to pause it")
         try:
             validate(args.schedule, now=now)
         except ScheduleError as error:

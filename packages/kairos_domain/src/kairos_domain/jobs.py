@@ -103,6 +103,8 @@ class JobKind(StrEnum):
     """Run a prompt on a schedule."""
     WATCH = "watch"
     """Observe a target on a schedule and alert on a condition."""
+    DIGEST = "digest"
+    """Send the weekly digest. Built from data; no agent run."""
 
 
 class JobStatus(StrEnum):
@@ -152,7 +154,8 @@ class JobRun(DomainModel):
 
     id: str
     job_id: str
-    run_id: str
+    run_id: str | None
+    """``None`` for firings without an agent run (the digest)."""
     scheduled_for: datetime
     status: JobRunStatus
     error: str | None

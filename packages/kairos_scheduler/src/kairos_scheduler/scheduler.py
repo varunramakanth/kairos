@@ -17,14 +17,15 @@ import asyncio
 from collections.abc import Sequence
 from contextlib import suppress
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timedelta
 
 import structlog
 
-from kairos_domain.jobs import Job, JobKind, JobRunStatus, JobStatus
+from kairos_domain.jobs import CronSchedule, Job, JobKind, JobRunStatus, JobSpec, JobStatus
 from kairos_domain.run import RunRequest, StopReason
 from kairos_domain.usage import Budget
 from kairos_harness import Clock, IdGenerator, SystemClock, UuidIdGenerator
+from kairos_notify import build_digest
 from kairos_scheduler.prompts import task_prompt, watch_prompt
 from kairos_scheduler.protocols import Claim, Finished, Firing, SchedulerStore, Settlement
 from kairos_scheduler.timing import describe, next_fire
@@ -125,9 +126,11 @@ class Scheduler:
         clock: Clock | None = None,
         ids: IdGenerator | None = None,
         lease_ttl_seconds: float = 60.0,
+        timezone: str = "America/Toronto",
     ) -> None:
         self._store = store
         self._model = model
+        self._timezone = timezone
         self._clock: Clock = clock or SystemClock()
         self._ids: IdGenerator = ids or UuidIdGenerator()
         self._ttl = lease_ttl_seconds
@@ -151,6 +154,9 @@ class Scheduler:
             if await self._store.close(claim, JobStatus.EXPIRED, now=now):
                 result.expired.append(job.id)
             return
+        if job.spec.kind is JobKind.DIGEST:
+            await self._fire_digest(claim, now, result)
+            return
         firing = plan_firing(
             job,
             now=now,
@@ -164,6 +170,22 @@ class Scheduler:
         else:
             log.warning("job_lease_lost", job_id=job.id)
 
+    async def _fire_digest(self, claim: Claim, now: datetime, result: TickResult) -> None:
+        job = claim.job
+        scheduled_for = job.next_run_at or now
+        since = job.last_run_at or scheduled_for - timedelta(days=7)
+        data = await self._store.digest_data(since=since, until=now)
+        fired = await self._store.fire_digest(
+            claim,
+            job_run_id=self._ids.new_id("jrun"),
+            scheduled_for=scheduled_for,
+            next_run_at=next_fire(job.spec.schedule, after=max(scheduled_for, now)),
+            notification=build_digest(data, timezone=self._timezone),
+            now=now,
+        )
+        if fired:
+            result.fired.append(job.id)
+
     async def run_forever(self, stop: asyncio.Event, *, poll_seconds: float = 5.0) -> None:
         while not stop.is_set():
             try:
@@ -172,6 +194,18 @@ class Scheduler:
                 log.exception("scheduler_tick_failed")
             with suppress(TimeoutError):
                 await asyncio.wait_for(stop.wait(), timeout=poll_seconds)
+
+
+DIGEST_JOB_ID = "job_weekly_digest"
+
+
+def digest_spec(timezone: str = "America/Toronto") -> JobSpec:
+    """The built-in weekly digest: Sunday 18:00 local time (owner's choice, M4)."""
+    return JobSpec(
+        name="Weekly digest",
+        kind=JobKind.DIGEST,
+        schedule=CronSchedule(expression="0 18 * * sun", timezone=timezone),
+    )
 
 
 def summarize(jobs: Sequence[Job]) -> str:

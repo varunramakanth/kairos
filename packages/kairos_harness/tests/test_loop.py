@@ -420,7 +420,7 @@ async def test_denied_tool_is_not_run_and_the_model_is_told() -> None:
     h = Harness(
         [tool_turn(("t1", "echo", {})), text_turn("understood")],
         [(simple_spec("echo"), echo)],
-        hooks=Gate(Deny("purchases are never autonomous")),
+        hooks=Gate(Deny(reason="purchases are never autonomous")),
     )
     events = await h.run()
 
@@ -437,7 +437,7 @@ async def test_approval_pauses_the_run_and_resume_runs_the_tool() -> None:
     waiting = Harness(
         [tool_turn(("t1", "echo", {"q": "x"}))],
         tools,
-        hooks=Gate(RequireApproval("emails to others need approval")),
+        hooks=Gate(RequireApproval(reason="emails to others need approval")),
         checkpointer=checkpointer,
     )
     events = await waiting.run()

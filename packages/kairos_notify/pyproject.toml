@@ -4,7 +4,12 @@ version = "0.1.0"
 description = "Notification channels: email and web push."
 requires-python = ">=3.12"
 dependencies = [
+    "aiosmtplib>=5.1,<6",
     "kairos-domain",
+    "kairos-harness",
+    "kairos-tools",
+    "pywebpush>=2.5,<3",
+    "structlog>=26.1.0",
 ]
 
 [build-system]
@@ -13,3 +18,5 @@ build-backend = "uv_build"
 
 [tool.uv.sources]
 kairos-domain = { workspace = true }
+kairos-harness = { workspace = true }
+kairos-tools = { workspace = true }

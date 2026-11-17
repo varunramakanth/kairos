@@ -47,6 +47,10 @@ flowchart BT
   worker --> tools
   worker --> db
   worker --> telemetry
+  worker --> scheduler
+  scheduler --> harness
+  scheduler --> tools
+  api --> scheduler
   telemetry[kairos_telemetry] --> domain
   evals[kairos_evals]
 ```
@@ -89,3 +93,4 @@ sequenceDiagram
 | [005](adr/005-cassettes.md) | Cassettes at the provider boundary and at HTTP level |
 | [007](adr/007-live-events.md) | Live events from worker to API over Postgres `LISTEN/NOTIFY` |
 | [008](adr/008-web-search.md) | Web search as a client-side tool on Tavily; own `web_fetch` with an SSRF guard |
+| [009](adr/009-scheduler-and-watches.md) | Each job firing is an agent run; watches: the model observes, code decides; user confirms agent-made jobs |

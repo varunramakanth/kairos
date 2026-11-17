@@ -7,17 +7,25 @@ credentials, and work for any provider.
 
 ``RecordingProvider`` and ``ReplayProvider`` both satisfy the ``Provider`` protocol,
 so the loop cannot tell them from a live backend.
+
+Live recordings also need the tools' results, since the web changes between runs:
+``RecordingToolExecutor`` and ``ReplayToolExecutor`` do the same at the tool
+boundary. Unit tests of individual HTTP tools use a mocked transport instead.
 """
 
 import hashlib
 import json
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Mapping, Sequence
 from pathlib import Path
+
+from pydantic import JsonValue
 
 from kairos_domain.base import DomainModel
 from kairos_domain.errors import KairosError
 from kairos_domain.model import ModelCompleted, ModelEvent, ModelRequest
-from kairos_harness.protocols import Provider
+from kairos_domain.run import ToolCallRecord
+from kairos_domain.tools import ToolContext, ToolOutput, ToolSpec
+from kairos_harness.protocols import Provider, ToolExecutor
 
 
 class CassetteMissError(KairosError):
@@ -114,3 +122,73 @@ class ReplayProvider:
             )
         for event in queue.pop(0).events:
             yield event
+
+
+# --- tool cassettes ---------------------------------------------------------------------
+
+
+class ToolCassetteEntry(DomainModel):
+    name: str
+    input: dict[str, JsonValue]
+    output: ToolOutput
+
+
+class ToolCassetteHeader(DomainModel):
+    """First line of a tool cassette: the tool set the run was recorded with.
+
+    Replay serves these specs, so a recorded case replays identically even where the
+    live tool set differs (for example, CI has no search API key).
+    """
+
+    specs: list[ToolSpec]
+
+
+def _tool_key(name: str, tool_input: Mapping[str, JsonValue]) -> str:
+    return f"{name}:{json.dumps(tool_input, sort_keys=True, separators=(',', ':'))}"
+
+
+class RecordingToolExecutor:
+    """Wraps a real ``ToolExecutor`` and records every call's input and output."""
+
+    def __init__(self, inner: ToolExecutor, path: Path) -> None:
+        self._inner = inner
+        self._path = path
+        path.parent.mkdir(parents=True, exist_ok=True)
+        header = ToolCassetteHeader(specs=list(inner.specs()))
+        path.write_text(header.model_dump_json() + "\n")
+
+    def specs(self) -> Sequence[ToolSpec]:
+        return self._inner.specs()
+
+    async def execute(self, call: ToolCallRecord, context: ToolContext) -> ToolOutput:
+        output = await self._inner.execute(call, context)
+        entry = ToolCassetteEntry(name=call.name, input=call.input, output=output)
+        with self._path.open("a") as file:
+            file.write(entry.model_dump_json() + "\n")
+        return output
+
+
+class ReplayToolExecutor:
+    """Serves tool results from a tool cassette. Never runs a real tool."""
+
+    def __init__(self, path: Path) -> None:
+        lines = [line for line in path.read_text().splitlines() if line.strip()]
+        if not lines:
+            raise CassetteMissError(f"empty tool cassette: {path}")
+        self._path = path
+        self._specs = ToolCassetteHeader.model_validate_json(lines[0]).specs
+        self._queues: dict[str, list[ToolOutput]] = {}
+        for line in lines[1:]:
+            entry = ToolCassetteEntry.model_validate_json(line)
+            self._queues.setdefault(_tool_key(entry.name, entry.input), []).append(entry.output)
+
+    def specs(self) -> Sequence[ToolSpec]:
+        return self._specs
+
+    async def execute(self, call: ToolCallRecord, context: ToolContext) -> ToolOutput:
+        queue = self._queues.get(_tool_key(call.name, call.input))
+        if not queue:
+            raise CassetteMissError(
+                f"no recorded result for {call.name} {call.input} in {self._path}"
+            )
+        return queue.pop(0)

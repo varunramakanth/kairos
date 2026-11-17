@@ -4,14 +4,24 @@ import pytest
 
 from kairos_domain.content import user_text
 from kairos_domain.model import ModelCompleted, ModelRequest
+from kairos_domain.run import ToolCallRecord
+from kairos_domain.tools import ToolContext
 from kairos_harness.cassette import (
     CassetteMissError,
     RecordingProvider,
+    RecordingToolExecutor,
     ReplayProvider,
+    ReplayToolExecutor,
     fingerprint,
     load_cassette,
 )
-from kairos_harness.testing import ScriptedProvider, text_turn, tool_turn
+from kairos_harness.testing import (
+    ScriptedProvider,
+    StaticToolExecutor,
+    simple_spec,
+    text_turn,
+    tool_turn,
+)
 
 
 def request(text: str = "hi") -> ModelRequest:
@@ -78,3 +88,20 @@ async def test_call_is_recorded_even_if_the_consumer_stops_at_the_completion(
         if isinstance(event, ModelCompleted):
             break  # the agent loop does exactly this
     assert len(load_cassette(path)) == 1
+
+
+async def test_tool_cassette_replays_results_and_the_recorded_tool_set(tmp_path: Path) -> None:
+    async def search(call: ToolCallRecord, context: ToolContext) -> str:
+        return f"results for {call.input['q']}"
+
+    path = tmp_path / "tools.jsonl"
+    recorder = RecordingToolExecutor(StaticToolExecutor([(simple_spec("search"), search)]), path)
+    ctx = ToolContext(run_id="r", tool_call_id="t", idempotency_key="t")
+    await recorder.execute(ToolCallRecord(id="t", name="search", input={"q": "evals"}), ctx)
+
+    replay = ReplayToolExecutor(path)
+    assert [s.name for s in replay.specs()] == ["search"]
+    output = await replay.execute(ToolCallRecord(id="x", name="search", input={"q": "evals"}), ctx)
+    assert output.content == "results for evals"
+    with pytest.raises(CassetteMissError, match="no recorded result for search"):
+        await replay.execute(ToolCallRecord(id="y", name="search", input={"q": "other"}), ctx)

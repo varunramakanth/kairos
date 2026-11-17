@@ -4,8 +4,10 @@ version = "0.1.0"
 description = "Built-in tools and the MCP client bridge."
 requires-python = ">=3.12"
 dependencies = [
+    "httpx2>=2.16",
     "kairos-domain",
     "pydantic>=2.11",
+    "trafilatura>=2.3",
 ]
 
 [build-system]

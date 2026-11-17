@@ -13,6 +13,7 @@ members = ["packages/*", "services/*"]
 
 [dependency-groups]
 dev = [
+    "asyncpg-stubs>=0.32,<0.33",
     "httpx2>=2.0",
     "pyright>=1.1.400",
     "pytest>=8.3",
@@ -69,6 +70,10 @@ testpaths = ["tests", "packages", "services"]
 addopts = "-ra --strict-markers --import-mode=importlib --allow-hosts=127.0.0.1,::1,localhost --allow-unix-socket"
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
+filterwarnings = [
+    # trafilatura imports urllib3's optional SOCKS support; we never use it.
+    "ignore:SOCKS support in urllib3:Warning",
+]
 markers = [
     "integration: needs local services such as Postgres (testcontainers)",
     "evals: eval suites run through kairos_evals",

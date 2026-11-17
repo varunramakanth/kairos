@@ -673,6 +673,434 @@
           }
         }
       }
+    },
+    "/approvals": {
+      "get": {
+        "tags": [
+          "approvals"
+        ],
+        "summary": "List Approvals",
+        "operationId": "list_approvals",
+        "parameters": [
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/ApprovalStatus"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Approval"
+                  },
+                  "title": "Response List Approvals"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/runs/{run_id}/approvals": {
+      "get": {
+        "tags": [
+          "approvals"
+        ],
+        "summary": "Run Approvals",
+        "operationId": "run_approvals",
+        "parameters": [
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Run Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Approval"
+                  },
+                  "title": "Response Run Approvals"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/approvals/{approval_id}/decide": {
+      "post": {
+        "tags": [
+          "approvals"
+        ],
+        "summary": "Decide Approval",
+        "description": "Approve or decline. When nothing else is pending for the run, it resumes.",
+        "operationId": "decide_approval",
+        "parameters": [
+          {
+            "name": "approval_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Approval Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Decision"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Approval"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/audit": {
+      "get": {
+        "tags": [
+          "audit"
+        ],
+        "summary": "List Audit",
+        "operationId": "list_audit",
+        "parameters": [
+          {
+            "name": "before",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Before"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 500,
+              "default": 200,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/AuditEntry"
+                  },
+                  "title": "Response List Audit"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/settings": {
+      "get": {
+        "tags": [
+          "settings"
+        ],
+        "summary": "Get Settings",
+        "operationId": "get_settings",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppSettings"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/settings/kill-switch": {
+      "put": {
+        "tags": [
+          "settings"
+        ],
+        "summary": "Set Kill Switch",
+        "description": "``actions_enabled=false`` denies every agent action with a side effect and\npauses all active jobs.",
+        "operationId": "set_kill_switch",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/KillSwitch"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppSettings"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/push/subscriptions": {
+      "post": {
+        "tags": [
+          "notifications"
+        ],
+        "summary": "Subscribe Push",
+        "operationId": "subscribe_push",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PushSubscription"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppSettings"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/push/unsubscribe": {
+      "post": {
+        "tags": [
+          "notifications"
+        ],
+        "summary": "Unsubscribe Push",
+        "operationId": "unsubscribe_push",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Unsubscribe"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppSettings"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/notifications": {
+      "get": {
+        "tags": [
+          "notifications"
+        ],
+        "summary": "List Notifications",
+        "operationId": "list_notifications",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/StoredNotification"
+                  },
+                  "type": "array",
+                  "title": "Response List Notifications"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/notifications/test": {
+      "post": {
+        "tags": [
+          "notifications"
+        ],
+        "summary": "Send Test Notification",
+        "description": "Queue a test message on the chosen channels (console and push by default).",
+        "operationId": "send_test_notification",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TestNotification"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Queued"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -696,6 +1124,14 @@
           "threshold"
         ],
         "title": "Above"
+      },
+      "Actor": {
+        "type": "string",
+        "enum": [
+          "agent",
+          "user",
+          "system"
+        ]
       },
       "Alert": {
         "properties": {
@@ -737,6 +1173,141 @@
         ],
         "title": "Alert"
       },
+      "AppSettings": {
+        "properties": {
+          "actions_enabled": {
+            "type": "boolean",
+            "title": "Actions Enabled"
+          },
+          "email_to": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email To"
+          },
+          "email_configured": {
+            "type": "boolean",
+            "title": "Email Configured"
+          },
+          "push_configured": {
+            "type": "boolean",
+            "title": "Push Configured"
+          },
+          "vapid_public_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vapid Public Key"
+          },
+          "timezone": {
+            "type": "string",
+            "title": "Timezone"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "actions_enabled",
+          "email_to",
+          "email_configured",
+          "push_configured",
+          "vapid_public_key",
+          "timezone"
+        ],
+        "title": "AppSettings"
+      },
+      "Approval": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "run_id": {
+            "type": "string",
+            "title": "Run Id"
+          },
+          "tool_call_id": {
+            "type": "string",
+            "title": "Tool Call Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "input": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/JsonValue"
+            },
+            "type": "object",
+            "title": "Input"
+          },
+          "reason": {
+            "type": "string",
+            "title": "Reason"
+          },
+          "risk": {
+            "$ref": "#/components/schemas/ToolRisk"
+          },
+          "status": {
+            "$ref": "#/components/schemas/ApprovalStatus"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "decided_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decided At"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "run_id",
+          "tool_call_id",
+          "name",
+          "input",
+          "reason",
+          "risk",
+          "status",
+          "note",
+          "created_at",
+          "decided_at"
+        ],
+        "title": "Approval",
+        "description": "A tool call waiting for (or decided by) a human."
+      },
       "ApprovalRequested": {
         "properties": {
           "run_id": {
@@ -769,6 +1340,17 @@
           "reason": {
             "type": "string",
             "title": "Reason"
+          },
+          "input": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/JsonValue"
+            },
+            "type": "object",
+            "title": "Input"
+          },
+          "risk": {
+            "$ref": "#/components/schemas/ToolRisk",
+            "default": "write_self"
           }
         },
         "additionalProperties": false,
@@ -781,7 +1363,72 @@
           "name",
           "reason"
         ],
-        "title": "ApprovalRequested"
+        "title": "ApprovalRequested",
+        "description": "A tool call waits for a human. The run pauses until every such call is decided."
+      },
+      "ApprovalStatus": {
+        "type": "string",
+        "enum": [
+          "pending",
+          "approved",
+          "denied"
+        ],
+        "title": "ApprovalStatus"
+      },
+      "AuditEntry": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "At"
+          },
+          "actor": {
+            "$ref": "#/components/schemas/Actor"
+          },
+          "action": {
+            "type": "string",
+            "title": "Action"
+          },
+          "subject": {
+            "type": "string",
+            "title": "Subject"
+          },
+          "run_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Run Id"
+          },
+          "detail": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/JsonValue"
+            },
+            "type": "object",
+            "title": "Detail"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "at",
+          "actor",
+          "action",
+          "subject",
+          "run_id",
+          "detail"
+        ],
+        "title": "AuditEntry",
+        "description": "One thing that happened with a side effect, or a human decision."
       },
       "Below": {
         "properties": {
@@ -909,6 +1556,14 @@
         "type": "object",
         "title": "Changed",
         "description": "The value moved by at least ``min_delta`` since the previous observation."
+      },
+      "ChannelName": {
+        "type": "string",
+        "enum": [
+          "console",
+          "email",
+          "push"
+        ]
       },
       "CheckpointWritten": {
         "properties": {
@@ -1115,6 +1770,32 @@
         "title": "CronSchedule",
         "description": "Standard five-field cron, evaluated in local wall-clock time of ``timezone``."
       },
+      "Decision": {
+        "properties": {
+          "approve": {
+            "type": "boolean",
+            "title": "Approve"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 1000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "approve"
+        ],
+        "title": "Decision"
+      },
       "HTTPValidationError": {
         "properties": {
           "detail": {
@@ -1276,7 +1957,8 @@
         "type": "string",
         "enum": [
           "task",
-          "watch"
+          "watch",
+          "digest"
         ],
         "title": "JobKind"
       },
@@ -1325,7 +2007,14 @@
             "title": "Job Id"
           },
           "run_id": {
-            "type": "string",
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Run Id"
           },
           "scheduled_for": {
@@ -1511,6 +2200,20 @@
         "description": "A row of the Tasks page."
       },
       "JsonValue": {},
+      "KillSwitch": {
+        "properties": {
+          "actions_enabled": {
+            "type": "boolean",
+            "title": "Actions Enabled"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "actions_enabled"
+        ],
+        "title": "KillSwitch"
+      },
       "Message": {
         "properties": {
           "role": {
@@ -1671,6 +2374,69 @@
         ],
         "title": "NewMessage"
       },
+      "Notification": {
+        "properties": {
+          "kind": {
+            "$ref": "#/components/schemas/NotificationKind"
+          },
+          "title": {
+            "type": "string",
+            "maxLength": 200,
+            "title": "Title"
+          },
+          "body": {
+            "type": "string",
+            "maxLength": 20000,
+            "title": "Body"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Url"
+          },
+          "channels": {
+            "items": {
+              "$ref": "#/components/schemas/ChannelName"
+            },
+            "type": "array",
+            "title": "Channels"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "kind",
+          "title",
+          "body"
+        ],
+        "title": "Notification"
+      },
+      "NotificationKind": {
+        "type": "string",
+        "enum": [
+          "alert",
+          "approval",
+          "digest",
+          "message",
+          "test"
+        ],
+        "title": "NotificationKind"
+      },
+      "NotificationStatus": {
+        "type": "string",
+        "enum": [
+          "pending",
+          "sent",
+          "failed"
+        ],
+        "title": "NotificationStatus"
+      },
       "Observation": {
         "properties": {
           "found": {
@@ -1803,6 +2569,62 @@
         ],
         "title": "Provenance",
         "description": "Where content came from, which decides whether it may be treated as instructions.\n\n``UNTRUSTED`` content (web pages, email, documents, third-party APIs) is data.\nThe harness wraps it in delimited blocks before the model sees it."
+      },
+      "PushKeys": {
+        "properties": {
+          "p256dh": {
+            "type": "string",
+            "title": "P256Dh"
+          },
+          "auth": {
+            "type": "string",
+            "title": "Auth"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "p256dh",
+          "auth"
+        ],
+        "title": "PushKeys"
+      },
+      "PushSubscription": {
+        "properties": {
+          "endpoint": {
+            "type": "string",
+            "pattern": "^https://",
+            "title": "Endpoint"
+          },
+          "keys": {
+            "$ref": "#/components/schemas/PushKeys"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "endpoint",
+          "keys"
+        ],
+        "title": "PushSubscription",
+        "description": "What the browser's ``PushManager.subscribe()`` returns."
+      },
+      "Queued": {
+        "properties": {
+          "channels": {
+            "items": {
+              "$ref": "#/components/schemas/ChannelName"
+            },
+            "type": "array",
+            "title": "Channels"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "channels"
+        ],
+        "title": "Queued"
       },
       "RunAccepted": {
         "properties": {
@@ -2285,6 +3107,60 @@
         "title": "StopReason",
         "description": "Why the loop stopped. Every exit from the loop names exactly one."
       },
+      "StoredNotification": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "notification": {
+            "$ref": "#/components/schemas/Notification"
+          },
+          "status": {
+            "$ref": "#/components/schemas/NotificationStatus"
+          },
+          "attempts": {
+            "type": "integer",
+            "title": "Attempts"
+          },
+          "results": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object",
+            "title": "Results"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "sent_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sent At"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "notification",
+          "status",
+          "attempts",
+          "results",
+          "created_at",
+          "sent_at"
+        ],
+        "title": "StoredNotification"
+      },
       "StoredObservation": {
         "properties": {
           "id": {
@@ -2323,6 +3199,20 @@
           "created_at"
         ],
         "title": "StoredObservation"
+      },
+      "TestNotification": {
+        "properties": {
+          "channels": {
+            "items": {
+              "$ref": "#/components/schemas/ChannelName"
+            },
+            "type": "array",
+            "title": "Channels"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "TestNotification"
       },
       "TextBlock": {
         "properties": {
@@ -2795,6 +3685,17 @@
         "title": "ToolResultBlock",
         "description": "The outcome of a tool call, exactly as the model saw it.\n\n``content`` is already truncated and, for untrusted tools, already wrapped."
       },
+      "ToolRisk": {
+        "type": "string",
+        "enum": [
+          "read",
+          "write_self",
+          "write_external",
+          "financial"
+        ],
+        "title": "ToolRisk",
+        "description": "How much damage a tool call can do. The policy engine keys approval rules on this."
+      },
       "ToolUseBlock": {
         "properties": {
           "type": {
@@ -2828,6 +3729,20 @@
         ],
         "title": "ToolUseBlock",
         "description": "The model asking for a tool to be called."
+      },
+      "Unsubscribe": {
+        "properties": {
+          "endpoint": {
+            "type": "string",
+            "title": "Endpoint"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "endpoint"
+        ],
+        "title": "Unsubscribe"
       },
       "Usage": {
         "properties": {

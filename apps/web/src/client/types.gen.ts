@@ -18,6 +18,8 @@ export type Above = {
     threshold: number;
 };
 
+export type Actor = 'agent' | 'user' | 'system';
+
 /**
  * Alert
  */
@@ -49,7 +51,87 @@ export type Alert = {
 };
 
 /**
+ * AppSettings
+ */
+export type AppSettings = {
+    /**
+     * Actions Enabled
+     */
+    actions_enabled: boolean;
+    /**
+     * Email To
+     */
+    email_to: string | null;
+    /**
+     * Email Configured
+     */
+    email_configured: boolean;
+    /**
+     * Push Configured
+     */
+    push_configured: boolean;
+    /**
+     * Vapid Public Key
+     */
+    vapid_public_key: string | null;
+    /**
+     * Timezone
+     */
+    timezone: string;
+};
+
+/**
+ * Approval
+ *
+ * A tool call waiting for (or decided by) a human.
+ */
+export type Approval = {
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * Run Id
+     */
+    run_id: string;
+    /**
+     * Tool Call Id
+     */
+    tool_call_id: string;
+    /**
+     * Name
+     */
+    name: string;
+    /**
+     * Input
+     */
+    input: {
+        [key: string]: JsonValue;
+    };
+    /**
+     * Reason
+     */
+    reason: string;
+    risk: ToolRisk;
+    status: ApprovalStatus;
+    /**
+     * Note
+     */
+    note: string | null;
+    /**
+     * Created At
+     */
+    created_at: string;
+    /**
+     * Decided At
+     */
+    decided_at: string | null;
+};
+
+/**
  * ApprovalRequested
+ *
+ * A tool call waits for a human. The run pauses until every such call is decided.
  */
 export type ApprovalRequested = {
     /**
@@ -80,6 +162,53 @@ export type ApprovalRequested = {
      * Reason
      */
     reason: string;
+    /**
+     * Input
+     */
+    input?: {
+        [key: string]: JsonValue;
+    };
+    risk?: ToolRisk;
+};
+
+/**
+ * ApprovalStatus
+ */
+export type ApprovalStatus = 'pending' | 'approved' | 'denied';
+
+/**
+ * AuditEntry
+ *
+ * One thing that happened with a side effect, or a human decision.
+ */
+export type AuditEntry = {
+    /**
+     * Id
+     */
+    id: number;
+    /**
+     * At
+     */
+    at: string;
+    actor: Actor;
+    /**
+     * Action
+     */
+    action: string;
+    /**
+     * Subject
+     */
+    subject: string;
+    /**
+     * Run Id
+     */
+    run_id: string | null;
+    /**
+     * Detail
+     */
+    detail: {
+        [key: string]: JsonValue;
+    };
 };
 
 /**
@@ -176,6 +305,8 @@ export type Changed = {
      */
     min_delta?: number;
 };
+
+export type ChannelName = 'console' | 'email' | 'push';
 
 /**
  * CheckpointWritten
@@ -317,6 +448,20 @@ export type CronSchedule = {
 };
 
 /**
+ * Decision
+ */
+export type Decision = {
+    /**
+     * Approve
+     */
+    approve: boolean;
+    /**
+     * Note
+     */
+    note?: string | null;
+};
+
+/**
  * HTTPValidationError
  */
 export type HttpValidationError = {
@@ -412,7 +557,7 @@ export type JobDetail = {
 /**
  * JobKind
  */
-export type JobKind = 'task' | 'watch';
+export type JobKind = 'task' | 'watch' | 'digest';
 
 /**
  * JobPatch
@@ -444,7 +589,7 @@ export type JobRun = {
     /**
      * Run Id
      */
-    run_id: string;
+    run_id: string | null;
     /**
      * Scheduled For
      */
@@ -522,6 +667,16 @@ export type JobSummary = {
 };
 
 export type JsonValue = unknown;
+
+/**
+ * KillSwitch
+ */
+export type KillSwitch = {
+    /**
+     * Actions Enabled
+     */
+    actions_enabled: boolean;
+};
 
 /**
  * Message
@@ -627,6 +782,39 @@ export type NewMessage = {
 };
 
 /**
+ * Notification
+ */
+export type Notification = {
+    kind: NotificationKind;
+    /**
+     * Title
+     */
+    title: string;
+    /**
+     * Body
+     */
+    body: string;
+    /**
+     * Url
+     */
+    url?: string | null;
+    /**
+     * Channels
+     */
+    channels?: Array<ChannelName>;
+};
+
+/**
+ * NotificationKind
+ */
+export type NotificationKind = 'alert' | 'approval' | 'digest' | 'message' | 'test';
+
+/**
+ * NotificationStatus
+ */
+export type NotificationStatus = 'pending' | 'sent' | 'failed';
+
+/**
  * Observation
  *
  * What a watch run saw. ``value`` is set when the extract is a number.
@@ -719,6 +907,43 @@ export type PausedJobs = {
  * The harness wraps it in delimited blocks before the model sees it.
  */
 export type Provenance = 'trusted' | 'untrusted';
+
+/**
+ * PushKeys
+ */
+export type PushKeys = {
+    /**
+     * P256Dh
+     */
+    p256dh: string;
+    /**
+     * Auth
+     */
+    auth: string;
+};
+
+/**
+ * PushSubscription
+ *
+ * What the browser's ``PushManager.subscribe()`` returns.
+ */
+export type PushSubscription = {
+    /**
+     * Endpoint
+     */
+    endpoint: string;
+    keys: PushKeys;
+};
+
+/**
+ * Queued
+ */
+export type Queued = {
+    /**
+     * Channels
+     */
+    channels: Array<ChannelName>;
+};
 
 /**
  * RunAccepted
@@ -1004,6 +1229,36 @@ export type StepStarted = {
 export type StopReason = 'completed' | 'budget_exceeded' | 'awaiting_approval' | 'awaiting_input' | 'cancelled' | 'refused' | 'failed';
 
 /**
+ * StoredNotification
+ */
+export type StoredNotification = {
+    /**
+     * Id
+     */
+    id: number;
+    notification: Notification;
+    status: NotificationStatus;
+    /**
+     * Attempts
+     */
+    attempts: number;
+    /**
+     * Results
+     */
+    results: {
+        [key: string]: string;
+    };
+    /**
+     * Created At
+     */
+    created_at: string;
+    /**
+     * Sent At
+     */
+    sent_at: string | null;
+};
+
+/**
  * StoredObservation
  */
 export type StoredObservation = {
@@ -1028,6 +1283,16 @@ export type StoredObservation = {
      * Created At
      */
     created_at: string;
+};
+
+/**
+ * TestNotification
+ */
+export type TestNotification = {
+    /**
+     * Channels
+     */
+    channels?: Array<ChannelName>;
 };
 
 /**
@@ -1372,6 +1637,13 @@ export type ToolResultBlock = {
 };
 
 /**
+ * ToolRisk
+ *
+ * How much damage a tool call can do. The policy engine keys approval rules on this.
+ */
+export type ToolRisk = 'read' | 'write_self' | 'write_external' | 'financial';
+
+/**
  * ToolUseBlock
  *
  * The model asking for a tool to be called.
@@ -1395,6 +1667,16 @@ export type ToolUseBlock = {
     input: {
         [key: string]: JsonValue;
     };
+};
+
+/**
+ * Unsubscribe
+ */
+export type Unsubscribe = {
+    /**
+     * Endpoint
+     */
+    endpoint: string;
 };
 
 /**
@@ -1906,3 +2188,267 @@ export type RunJobNowResponses = {
 };
 
 export type RunJobNowResponse = RunJobNowResponses[keyof RunJobNowResponses];
+
+export type ListApprovalsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Status
+         */
+        status?: ApprovalStatus | null;
+    };
+    url: '/approvals';
+};
+
+export type ListApprovalsErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type ListApprovalsError = ListApprovalsErrors[keyof ListApprovalsErrors];
+
+export type ListApprovalsResponses = {
+    /**
+     * Response List Approvals
+     *
+     * Successful Response
+     */
+    200: Array<Approval>;
+};
+
+export type ListApprovalsResponse = ListApprovalsResponses[keyof ListApprovalsResponses];
+
+export type RunApprovalsData = {
+    body?: never;
+    path: {
+        /**
+         * Run Id
+         */
+        run_id: string;
+    };
+    query?: never;
+    url: '/runs/{run_id}/approvals';
+};
+
+export type RunApprovalsErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type RunApprovalsError = RunApprovalsErrors[keyof RunApprovalsErrors];
+
+export type RunApprovalsResponses = {
+    /**
+     * Response Run Approvals
+     *
+     * Successful Response
+     */
+    200: Array<Approval>;
+};
+
+export type RunApprovalsResponse = RunApprovalsResponses[keyof RunApprovalsResponses];
+
+export type DecideApprovalData = {
+    body: Decision;
+    path: {
+        /**
+         * Approval Id
+         */
+        approval_id: string;
+    };
+    query?: never;
+    url: '/approvals/{approval_id}/decide';
+};
+
+export type DecideApprovalErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type DecideApprovalError = DecideApprovalErrors[keyof DecideApprovalErrors];
+
+export type DecideApprovalResponses = {
+    /**
+     * Successful Response
+     */
+    200: Approval;
+};
+
+export type DecideApprovalResponse = DecideApprovalResponses[keyof DecideApprovalResponses];
+
+export type ListAuditData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Before
+         */
+        before?: number | null;
+        /**
+         * Limit
+         */
+        limit?: number;
+    };
+    url: '/audit';
+};
+
+export type ListAuditErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type ListAuditError = ListAuditErrors[keyof ListAuditErrors];
+
+export type ListAuditResponses = {
+    /**
+     * Response List Audit
+     *
+     * Successful Response
+     */
+    200: Array<AuditEntry>;
+};
+
+export type ListAuditResponse = ListAuditResponses[keyof ListAuditResponses];
+
+export type GetSettingsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/settings';
+};
+
+export type GetSettingsResponses = {
+    /**
+     * Successful Response
+     */
+    200: AppSettings;
+};
+
+export type GetSettingsResponse = GetSettingsResponses[keyof GetSettingsResponses];
+
+export type SetKillSwitchData = {
+    body: KillSwitch;
+    path?: never;
+    query?: never;
+    url: '/settings/kill-switch';
+};
+
+export type SetKillSwitchErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type SetKillSwitchError = SetKillSwitchErrors[keyof SetKillSwitchErrors];
+
+export type SetKillSwitchResponses = {
+    /**
+     * Successful Response
+     */
+    200: AppSettings;
+};
+
+export type SetKillSwitchResponse = SetKillSwitchResponses[keyof SetKillSwitchResponses];
+
+export type SubscribePushData = {
+    body: PushSubscription;
+    path?: never;
+    query?: never;
+    url: '/push/subscriptions';
+};
+
+export type SubscribePushErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type SubscribePushError = SubscribePushErrors[keyof SubscribePushErrors];
+
+export type SubscribePushResponses = {
+    /**
+     * Successful Response
+     */
+    201: AppSettings;
+};
+
+export type SubscribePushResponse = SubscribePushResponses[keyof SubscribePushResponses];
+
+export type UnsubscribePushData = {
+    body: Unsubscribe;
+    path?: never;
+    query?: never;
+    url: '/push/unsubscribe';
+};
+
+export type UnsubscribePushErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type UnsubscribePushError = UnsubscribePushErrors[keyof UnsubscribePushErrors];
+
+export type UnsubscribePushResponses = {
+    /**
+     * Successful Response
+     */
+    200: AppSettings;
+};
+
+export type UnsubscribePushResponse = UnsubscribePushResponses[keyof UnsubscribePushResponses];
+
+export type ListNotificationsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/notifications';
+};
+
+export type ListNotificationsResponses = {
+    /**
+     * Response List Notifications
+     *
+     * Successful Response
+     */
+    200: Array<StoredNotification>;
+};
+
+export type ListNotificationsResponse = ListNotificationsResponses[keyof ListNotificationsResponses];
+
+export type SendTestNotificationData = {
+    body: TestNotification;
+    path?: never;
+    query?: never;
+    url: '/notifications/test';
+};
+
+export type SendTestNotificationErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type SendTestNotificationError = SendTestNotificationErrors[keyof SendTestNotificationErrors];
+
+export type SendTestNotificationResponses = {
+    /**
+     * Successful Response
+     */
+    202: Queued;
+};
+
+export type SendTestNotificationResponse = SendTestNotificationResponses[keyof SendTestNotificationResponses];

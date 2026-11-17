@@ -26,7 +26,9 @@ export function useRunStream(
   const [view, dispatch] = useReducer(applyEvent, stored, buildTurn);
   const finishedRef = useRef(onFinished);
   finishedRef.current = onFinished;
-  const startSeq = useRef(view.lastSeq);
+  // Where a (re)started stream picks up: whatever this view has already applied.
+  const lastSeq = useRef(view.lastSeq);
+  lastSeq.current = view.lastSeq;
 
   useEffect(() => {
     if (!active) return;
@@ -34,7 +36,7 @@ export function useRunStream(
     (async () => {
       const { stream } = await streamRunEvents({
         path: { run_id: runId },
-        query: { after: startSeq.current },
+        query: { after: lastSeq.current },
         signal: controller.signal,
         sseMaxRetryAttempts: 5,
       });

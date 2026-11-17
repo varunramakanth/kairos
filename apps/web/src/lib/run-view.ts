@@ -17,6 +17,7 @@ import type {
 export type ToolStatus =
   | "streaming"
   | "running"
+  | "awaiting_approval"
   | "done"
   | "error"
   | "uncertain";
@@ -174,12 +175,18 @@ export function applyEvent(view: TurnView, event: RunEvent): TurnView {
       }));
     case "approval_requested":
       return notice(
-        next,
+        upsertTool(next, event.tool_call_id, (call) => ({
+          ...call,
+          status: "awaiting_approval",
+        })),
         `approval-${event.tool_call_id}`,
         approvalText(event),
       );
     case "context_compacted":
       return notice(next, `compacted-${event.epoch}`, compactedText(event));
+    case "run_resumed":
+      // A paused run continues (e.g. after an approval): it is live again.
+      return { ...next, finished: null };
     case "model_call_finished":
       return { ...next, costUsd: next.costUsd + event.cost_usd };
     case "run_finished":

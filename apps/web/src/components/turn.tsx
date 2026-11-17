@@ -5,6 +5,7 @@ import Link from "next/link";
 import type { RunDetail } from "@/client/types.gen";
 import { Markdown } from "@/components/markdown";
 import { PlanChecklist } from "@/components/plan-checklist";
+import { RunApprovals } from "@/components/run-approvals";
 import { ScheduleProposal } from "@/components/schedule-proposal";
 import { ToolCard } from "@/components/tool-card";
 import { useRunStream } from "@/hooks/use-run-stream";
@@ -87,6 +88,9 @@ export function Turn({
           <p className="animate-pulse text-muted-foreground text-sm">
             Thinking…
           </p>
+        )}
+        {!working && stop === "awaiting_approval" && (
+          <RunApprovals runId={run.id} onAllDecided={onFinished} />
         )}
         {stop && STOP_LABELS[stop] && (
           <p className="text-destructive text-sm">

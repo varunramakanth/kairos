@@ -1,11 +1,19 @@
 "use client";
 
-import { CalendarClock, MessageSquare, Plus } from "lucide-react";
+import {
+  CalendarClock,
+  Inbox,
+  MessageSquare,
+  Plus,
+  ScrollText,
+  Settings,
+} from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
-import { listThreads } from "@/client/sdk.gen";
+import { getSettings, listApprovals, listThreads } from "@/client/sdk.gen";
 import type { Thread } from "@/client/types.gen";
+import { APPROVALS_CHANGED } from "@/components/approval-card";
 import { THREADS_CHANGED } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
@@ -13,17 +21,31 @@ export function ThreadSidebar() {
   const pathname = usePathname();
   const [threads, setThreads] = useState<Thread[]>([]);
   const [offline, setOffline] = useState(false);
+  const [pending, setPending] = useState(0);
+  const [actionsOff, setActionsOff] = useState(false);
 
   const refresh = useCallback(async () => {
-    const { data, error } = await listThreads();
-    setOffline(Boolean(error) || data === undefined);
-    if (data) setThreads(data);
+    const [threadList, approvals, settings] = await Promise.all([
+      listThreads(),
+      listApprovals({ query: { status: "pending" } }),
+      getSettings(),
+    ]);
+    setOffline(Boolean(threadList.error) || threadList.data === undefined);
+    if (threadList.data) setThreads(threadList.data);
+    if (approvals.data) setPending(approvals.data.length);
+    if (settings.data) setActionsOff(!settings.data.actions_enabled);
   }, []);
 
   useEffect(() => {
     void refresh();
+    const timer = window.setInterval(refresh, 15_000);
     window.addEventListener(THREADS_CHANGED, refresh);
-    return () => window.removeEventListener(THREADS_CHANGED, refresh);
+    window.addEventListener(APPROVALS_CHANGED, refresh);
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener(THREADS_CHANGED, refresh);
+      window.removeEventListener(APPROVALS_CHANGED, refresh);
+    };
   }, [refresh]);
 
   return (
@@ -40,7 +62,22 @@ export function ThreadSidebar() {
           New
         </Link>
       </div>
-      <div className="px-2 pb-2">
+      <div className="space-y-0.5 px-2 pb-2">
+        <Link
+          href="/inbox"
+          className={cn(
+            "flex items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-muted",
+            pathname.startsWith("/inbox") && "bg-muted font-medium",
+          )}
+        >
+          <Inbox className="size-3.5 text-muted-foreground" />
+          Approvals
+          {pending > 0 && (
+            <span className="ml-auto rounded-full bg-amber-500 px-1.5 text-white text-xs tabular-nums">
+              {pending}
+            </span>
+          )}
+        </Link>
         <Link
           href="/tasks"
           className={cn(
@@ -50,6 +87,31 @@ export function ThreadSidebar() {
         >
           <CalendarClock className="size-3.5 text-muted-foreground" />
           Tasks &amp; watches
+        </Link>
+        <Link
+          href="/audit"
+          className={cn(
+            "flex items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-muted",
+            pathname.startsWith("/audit") && "bg-muted font-medium",
+          )}
+        >
+          <ScrollText className="size-3.5 text-muted-foreground" />
+          Audit log
+        </Link>
+        <Link
+          href="/settings"
+          className={cn(
+            "flex items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-muted",
+            pathname.startsWith("/settings") && "bg-muted font-medium",
+          )}
+        >
+          <Settings className="size-3.5 text-muted-foreground" />
+          Settings
+          {actionsOff && (
+            <span className="ml-auto rounded bg-destructive px-1.5 text-white text-xs">
+              off
+            </span>
+          )}
         </Link>
       </div>
       <div className="px-4 pb-1 text-muted-foreground text-xs">Threads</div>

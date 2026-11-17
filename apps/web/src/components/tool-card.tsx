@@ -5,6 +5,7 @@ import {
   CircleCheck,
   CircleHelp,
   Globe,
+  Hand,
   Loader,
   Search,
   ShieldAlert,
@@ -39,6 +40,13 @@ function StatusIcon({ status }: { status: ToolCallView["status"] }) {
         <Loader
           className="size-4 animate-spin text-muted-foreground"
           aria-label="running"
+        />
+      );
+    case "awaiting_approval":
+      return (
+        <Hand
+          className="size-4 text-amber-600"
+          aria-label="waiting for approval"
         />
       );
     case "done":

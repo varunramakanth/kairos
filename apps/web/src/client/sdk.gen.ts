@@ -2,7 +2,7 @@
 
 import type { Client, ClientMeta, Options as Options2, RequestResult, ServerSentEventsResult, TDataShape } from './client';
 import { client } from './client.gen';
-import type { ConfirmJobData, ConfirmJobErrors, ConfirmJobResponses, CreateJobData, CreateJobErrors, CreateJobResponses, CreateThreadData, CreateThreadErrors, CreateThreadResponses, GetBlobData, GetBlobErrors, GetBlobResponses, GetJobData, GetJobErrors, GetJobResponses, GetRunData, GetRunErrors, GetRunMessagesData, GetRunMessagesErrors, GetRunMessagesResponses, GetRunResponses, GetThreadData, GetThreadErrors, GetThreadResponses, HealthData, HealthResponses, ListJobsData, ListJobsResponses, ListThreadsData, ListThreadsResponses, PauseAllJobsData, PauseAllJobsResponses, RunJobNowData, RunJobNowErrors, RunJobNowResponses, SendMessageData, SendMessageErrors, SendMessageResponses, StreamRunEventsData, StreamRunEventsErrors, StreamRunEventsResponses, UpdateJobData, UpdateJobErrors, UpdateJobResponses } from './types.gen';
+import type { ConfirmJobData, ConfirmJobErrors, ConfirmJobResponses, CreateJobData, CreateJobErrors, CreateJobResponses, CreateThreadData, CreateThreadErrors, CreateThreadResponses, DecideApprovalData, DecideApprovalErrors, DecideApprovalResponses, GetBlobData, GetBlobErrors, GetBlobResponses, GetJobData, GetJobErrors, GetJobResponses, GetRunData, GetRunErrors, GetRunMessagesData, GetRunMessagesErrors, GetRunMessagesResponses, GetRunResponses, GetSettingsData, GetSettingsResponses, GetThreadData, GetThreadErrors, GetThreadResponses, HealthData, HealthResponses, ListApprovalsData, ListApprovalsErrors, ListApprovalsResponses, ListAuditData, ListAuditErrors, ListAuditResponses, ListJobsData, ListJobsResponses, ListNotificationsData, ListNotificationsResponses, ListThreadsData, ListThreadsResponses, PauseAllJobsData, PauseAllJobsResponses, RunApprovalsData, RunApprovalsErrors, RunApprovalsResponses, RunJobNowData, RunJobNowErrors, RunJobNowResponses, SendMessageData, SendMessageErrors, SendMessageResponses, SendTestNotificationData, SendTestNotificationErrors, SendTestNotificationResponses, SetKillSwitchData, SetKillSwitchErrors, SetKillSwitchResponses, StreamRunEventsData, StreamRunEventsErrors, StreamRunEventsResponses, SubscribePushData, SubscribePushErrors, SubscribePushResponses, UnsubscribePushData, UnsubscribePushErrors, UnsubscribePushResponses, UpdateJobData, UpdateJobErrors, UpdateJobResponses } from './types.gen';
 
 export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends boolean = boolean, TResponse = unknown> = Options2<TData, ThrowOnError, TResponse> & {
     /**
@@ -144,3 +144,95 @@ export const confirmJob = <ThrowOnError extends boolean = false>(options: Option
  * Fire an active job at the next scheduler tick instead of waiting.
  */
 export const runJobNow = <ThrowOnError extends boolean = false>(options: Options<RunJobNowData, ThrowOnError>): RequestResult<RunJobNowResponses, RunJobNowErrors, ThrowOnError> => (options.client ?? client).post<RunJobNowResponses, RunJobNowErrors, ThrowOnError>({ url: '/jobs/{job_id}/run', ...options });
+
+/**
+ * List Approvals
+ */
+export const listApprovals = <ThrowOnError extends boolean = false>(options?: Options<ListApprovalsData, ThrowOnError>): RequestResult<ListApprovalsResponses, ListApprovalsErrors, ThrowOnError> => (options?.client ?? client).get<ListApprovalsResponses, ListApprovalsErrors, ThrowOnError>({ url: '/approvals', ...options });
+
+/**
+ * Run Approvals
+ */
+export const runApprovals = <ThrowOnError extends boolean = false>(options: Options<RunApprovalsData, ThrowOnError>): RequestResult<RunApprovalsResponses, RunApprovalsErrors, ThrowOnError> => (options.client ?? client).get<RunApprovalsResponses, RunApprovalsErrors, ThrowOnError>({ url: '/runs/{run_id}/approvals', ...options });
+
+/**
+ * Decide Approval
+ *
+ * Approve or decline. When nothing else is pending for the run, it resumes.
+ */
+export const decideApproval = <ThrowOnError extends boolean = false>(options: Options<DecideApprovalData, ThrowOnError>): RequestResult<DecideApprovalResponses, DecideApprovalErrors, ThrowOnError> => (options.client ?? client).post<DecideApprovalResponses, DecideApprovalErrors, ThrowOnError>({
+    url: '/approvals/{approval_id}/decide',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * List Audit
+ */
+export const listAudit = <ThrowOnError extends boolean = false>(options?: Options<ListAuditData, ThrowOnError>): RequestResult<ListAuditResponses, ListAuditErrors, ThrowOnError> => (options?.client ?? client).get<ListAuditResponses, ListAuditErrors, ThrowOnError>({ url: '/audit', ...options });
+
+/**
+ * Get Settings
+ */
+export const getSettings = <ThrowOnError extends boolean = false>(options?: Options<GetSettingsData, ThrowOnError>): RequestResult<GetSettingsResponses, unknown, ThrowOnError> => (options?.client ?? client).get<GetSettingsResponses, unknown, ThrowOnError>({ url: '/settings', ...options });
+
+/**
+ * Set Kill Switch
+ *
+ * ``actions_enabled=false`` denies every agent action with a side effect and
+ * pauses all active jobs.
+ */
+export const setKillSwitch = <ThrowOnError extends boolean = false>(options: Options<SetKillSwitchData, ThrowOnError>): RequestResult<SetKillSwitchResponses, SetKillSwitchErrors, ThrowOnError> => (options.client ?? client).put<SetKillSwitchResponses, SetKillSwitchErrors, ThrowOnError>({
+    url: '/settings/kill-switch',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Subscribe Push
+ */
+export const subscribePush = <ThrowOnError extends boolean = false>(options: Options<SubscribePushData, ThrowOnError>): RequestResult<SubscribePushResponses, SubscribePushErrors, ThrowOnError> => (options.client ?? client).post<SubscribePushResponses, SubscribePushErrors, ThrowOnError>({
+    url: '/push/subscriptions',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Unsubscribe Push
+ */
+export const unsubscribePush = <ThrowOnError extends boolean = false>(options: Options<UnsubscribePushData, ThrowOnError>): RequestResult<UnsubscribePushResponses, UnsubscribePushErrors, ThrowOnError> => (options.client ?? client).post<UnsubscribePushResponses, UnsubscribePushErrors, ThrowOnError>({
+    url: '/push/unsubscribe',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * List Notifications
+ */
+export const listNotifications = <ThrowOnError extends boolean = false>(options?: Options<ListNotificationsData, ThrowOnError>): RequestResult<ListNotificationsResponses, unknown, ThrowOnError> => (options?.client ?? client).get<ListNotificationsResponses, unknown, ThrowOnError>({ url: '/notifications', ...options });
+
+/**
+ * Send Test Notification
+ *
+ * Queue a test message on the chosen channels (console and push by default).
+ */
+export const sendTestNotification = <ThrowOnError extends boolean = false>(options: Options<SendTestNotificationData, ThrowOnError>): RequestResult<SendTestNotificationResponses, SendTestNotificationErrors, ThrowOnError> => (options.client ?? client).post<SendTestNotificationResponses, SendTestNotificationErrors, ThrowOnError>({
+    url: '/notifications/test',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});

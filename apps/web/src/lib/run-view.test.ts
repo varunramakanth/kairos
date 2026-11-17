@@ -183,6 +183,53 @@ describe("tools", () => {
   });
 });
 
+describe("pause and resume", () => {
+  it("marks a call that waits for approval", () => {
+    const view = buildTurn([
+      durable(0, {
+        type: "tool_call_end",
+        tool_call_id: "t1",
+        name: "notify_me",
+        input: {},
+      }),
+      durable(1, {
+        type: "approval_requested",
+        tool_call_id: "t1",
+        name: "notify_me",
+        reason: "r",
+        input: {},
+        risk: "write_external",
+      }),
+    ]);
+    const tool = view.items.find((i) => i.kind === "tool");
+    expect(tool?.kind === "tool" && tool.call.status).toBe("awaiting_approval");
+  });
+
+  it("is live again after a paused run resumes", () => {
+    const paused = buildTurn([
+      durable(0, {
+        type: "run_finished",
+        stop_reason: "awaiting_approval",
+        output_text: null,
+        error: null,
+        usage,
+        cost_usd: 0,
+      }),
+    ]);
+    expect(paused.finished?.stop_reason).toBe("awaiting_approval");
+    const resumed = applyEvent(
+      paused,
+      durable(1, { type: "run_resumed", attempt: 2, from_step: 1 }),
+    );
+    expect(resumed.finished).toBeNull();
+    const typing = applyEvent(
+      resumed,
+      live({ type: "text_message_start", message_id: "m" }),
+    );
+    expect(typing.items).toHaveLength(1);
+  });
+});
+
 describe("isRunEvent", () => {
   it("accepts event payloads and rejects anything else", () => {
     expect(isRunEvent({ type: "run_started", run_id: "r" })).toBe(true);

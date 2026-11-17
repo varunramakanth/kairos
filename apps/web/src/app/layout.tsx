@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+import { Suspense } from "react";
+import { ThreadSidebar } from "@/components/thread-sidebar";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -23,7 +25,17 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       lang="en"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col">{children}</body>
+      <body className="flex h-full">
+        {/* The sidebar reads the current path, which is request-time data. */}
+        <Suspense
+          fallback={
+            <aside className="hidden w-64 shrink-0 border-r bg-sidebar md:block" />
+          }
+        >
+          <ThreadSidebar />
+        </Suspense>
+        <main className="flex min-w-0 flex-1 flex-col">{children}</main>
+      </body>
     </html>
   );
 }

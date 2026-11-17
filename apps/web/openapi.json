@@ -1,0 +1,1782 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Kairos API",
+    "version": "0.2.0"
+  },
+  "paths": {
+    "/health": {
+      "get": {
+        "tags": ["meta"],
+        "summary": "Health",
+        "operationId": "health",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Health"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/threads": {
+      "get": {
+        "tags": ["threads"],
+        "summary": "List Threads",
+        "operationId": "list_threads",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/Thread"
+                  },
+                  "type": "array",
+                  "title": "Response List Threads"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": ["threads"],
+        "summary": "Create Thread",
+        "description": "Start a conversation with its first message.",
+        "operationId": "create_thread",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NewMessage"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunAccepted"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/threads/{thread_id}": {
+      "get": {
+        "tags": ["threads"],
+        "summary": "Get Thread",
+        "operationId": "get_thread",
+        "parameters": [
+          {
+            "name": "thread_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Thread Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ThreadDetail"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/threads/{thread_id}/messages": {
+      "post": {
+        "tags": ["threads"],
+        "summary": "Send Message",
+        "description": "Add a turn. Returns 409 while the thread's previous run is still going.",
+        "operationId": "send_message",
+        "parameters": [
+          {
+            "name": "thread_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Thread Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NewMessage"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunAccepted"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/runs/{run_id}": {
+      "get": {
+        "tags": ["runs"],
+        "summary": "Get Run",
+        "operationId": "get_run",
+        "parameters": [
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Run Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunDetail"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/runs/{run_id}/messages": {
+      "get": {
+        "tags": ["runs"],
+        "summary": "Get Run Messages",
+        "description": "What the model saw: the run's history in its current epoch.",
+        "operationId": "get_run_messages",
+        "parameters": [
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Run Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Message"
+                  },
+                  "title": "Response Get Run Messages"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/runs/{run_id}/events": {
+      "get": {
+        "tags": ["runs"],
+        "summary": "Stream Run Events",
+        "description": "Server-sent events for one run: stored events after ``after`` (or the\n``Last-Event-ID`` header), then live events until the run stops.",
+        "operationId": "stream_run_events",
+        "parameters": [
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Run Id"
+            }
+          },
+          {
+            "name": "after",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": -1,
+              "title": "After"
+            }
+          },
+          {
+            "name": "last-event-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Last-Event-Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "text/event-stream": {
+                "itemSchema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "string",
+                      "contentMediaType": "application/json",
+                      "contentSchema": {
+                        "$ref": "#/components/schemas/RunEvent"
+                      }
+                    },
+                    "event": {
+                      "type": "string"
+                    },
+                    "id": {
+                      "type": "string"
+                    },
+                    "retry": {
+                      "type": "integer",
+                      "minimum": 0
+                    }
+                  },
+                  "required": ["data"]
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/blobs/{blob_id}": {
+      "get": {
+        "tags": ["runs"],
+        "summary": "Get Blob",
+        "description": "The full text of a tool result that was truncated for the model.",
+        "operationId": "get_blob",
+        "parameters": [
+          {
+            "name": "blob_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Blob Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Blob"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "ApprovalRequested": {
+        "properties": {
+          "run_id": {
+            "type": "string",
+            "title": "Run Id"
+          },
+          "ts": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Ts"
+          },
+          "seq": {
+            "type": "integer",
+            "title": "Seq"
+          },
+          "type": {
+            "type": "string",
+            "const": "approval_requested",
+            "title": "Type",
+            "default": "approval_requested"
+          },
+          "tool_call_id": {
+            "type": "string",
+            "title": "Tool Call Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "reason": {
+            "type": "string",
+            "title": "Reason"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["run_id", "ts", "seq", "tool_call_id", "name", "reason"],
+        "title": "ApprovalRequested"
+      },
+      "Blob": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "content": {
+            "type": "string",
+            "title": "Content"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["id", "content"],
+        "title": "Blob"
+      },
+      "BudgetSpent": {
+        "properties": {
+          "total_tokens": {
+            "type": "integer",
+            "title": "Total Tokens",
+            "default": 0
+          },
+          "cost_usd": {
+            "type": "number",
+            "title": "Cost Usd",
+            "default": 0.0
+          },
+          "wall_seconds": {
+            "type": "number",
+            "title": "Wall Seconds",
+            "default": 0.0
+          },
+          "tool_calls": {
+            "type": "integer",
+            "title": "Tool Calls",
+            "default": 0
+          },
+          "steps": {
+            "type": "integer",
+            "title": "Steps",
+            "default": 0
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "BudgetSpent",
+        "description": "What a run has consumed so far, in the same dimensions as :class:`Budget`."
+      },
+      "BudgetUpdated": {
+        "properties": {
+          "run_id": {
+            "type": "string",
+            "title": "Run Id"
+          },
+          "ts": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Ts"
+          },
+          "seq": {
+            "type": "integer",
+            "title": "Seq"
+          },
+          "type": {
+            "type": "string",
+            "const": "budget_updated",
+            "title": "Type",
+            "default": "budget_updated"
+          },
+          "spent": {
+            "$ref": "#/components/schemas/BudgetSpent"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["run_id", "ts", "seq", "spent"],
+        "title": "BudgetUpdated"
+      },
+      "CheckpointWritten": {
+        "properties": {
+          "run_id": {
+            "type": "string",
+            "title": "Run Id"
+          },
+          "ts": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Ts"
+          },
+          "seq": {
+            "type": "null",
+            "title": "Seq"
+          },
+          "type": {
+            "type": "string",
+            "const": "checkpoint_written",
+            "title": "Type",
+            "default": "checkpoint_written"
+          },
+          "step": {
+            "type": "integer",
+            "title": "Step"
+          },
+          "through_seq": {
+            "type": "integer",
+            "title": "Through Seq"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["run_id", "ts", "step", "through_seq"],
+        "title": "CheckpointWritten"
+      },
+      "ContentBlock": {
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/TextBlock"
+          },
+          {
+            "$ref": "#/components/schemas/ToolUseBlock"
+          },
+          {
+            "$ref": "#/components/schemas/ToolResultBlock"
+          },
+          {
+            "$ref": "#/components/schemas/OpaqueBlock"
+          }
+        ],
+        "discriminator": {
+          "propertyName": "type",
+          "mapping": {
+            "opaque": "#/components/schemas/OpaqueBlock",
+            "text": "#/components/schemas/TextBlock",
+            "tool_result": "#/components/schemas/ToolResultBlock",
+            "tool_use": "#/components/schemas/ToolUseBlock"
+          }
+        }
+      },
+      "ContextCompacted": {
+        "properties": {
+          "run_id": {
+            "type": "string",
+            "title": "Run Id"
+          },
+          "ts": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Ts"
+          },
+          "seq": {
+            "type": "integer",
+            "title": "Seq"
+          },
+          "type": {
+            "type": "string",
+            "const": "context_compacted",
+            "title": "Type",
+            "default": "context_compacted"
+          },
+          "epoch": {
+            "type": "integer",
+            "title": "Epoch"
+          },
+          "messages_summarized": {
+            "type": "integer",
+            "title": "Messages Summarized"
+          },
+          "input_tokens_before": {
+            "type": "integer",
+            "title": "Input Tokens Before"
+          },
+          "summary": {
+            "type": "string",
+            "title": "Summary"
+          },
+          "archive_blob_id": {
+            "type": "string",
+            "title": "Archive Blob Id"
+          },
+          "usage": {
+            "$ref": "#/components/schemas/Usage"
+          },
+          "cost_usd": {
+            "type": "number",
+            "title": "Cost Usd"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "run_id",
+          "ts",
+          "seq",
+          "epoch",
+          "messages_summarized",
+          "input_tokens_before",
+          "summary",
+          "archive_blob_id",
+          "usage",
+          "cost_usd"
+        ],
+        "title": "ContextCompacted",
+        "description": "The context grew too large and was replaced by a summary (a new epoch).\n\nThe previous epoch's messages are kept in full as ``archive_blob_id``."
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "Health": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "version": {
+            "type": "string",
+            "title": "Version"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["status", "version"],
+        "title": "Health"
+      },
+      "JsonValue": {},
+      "Message": {
+        "properties": {
+          "role": {
+            "type": "string",
+            "enum": ["user", "assistant"],
+            "title": "Role"
+          },
+          "content": {
+            "items": {
+              "$ref": "#/components/schemas/ContentBlock"
+            },
+            "type": "array",
+            "title": "Content"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["role", "content"],
+        "title": "Message"
+      },
+      "ModelCallFinished": {
+        "properties": {
+          "run_id": {
+            "type": "string",
+            "title": "Run Id"
+          },
+          "ts": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Ts"
+          },
+          "seq": {
+            "type": "integer",
+            "title": "Seq"
+          },
+          "type": {
+            "type": "string",
+            "const": "model_call_finished",
+            "title": "Type",
+            "default": "model_call_finished"
+          },
+          "step": {
+            "type": "integer",
+            "title": "Step"
+          },
+          "model": {
+            "type": "string",
+            "title": "Model"
+          },
+          "stop_reason": {
+            "$ref": "#/components/schemas/ModelStopReason"
+          },
+          "usage": {
+            "$ref": "#/components/schemas/Usage"
+          },
+          "cost_usd": {
+            "type": "number",
+            "title": "Cost Usd"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "run_id",
+          "ts",
+          "seq",
+          "step",
+          "model",
+          "stop_reason",
+          "usage",
+          "cost_usd"
+        ],
+        "title": "ModelCallFinished",
+        "description": "One model call completed. ``model`` is the model that actually answered."
+      },
+      "ModelStopReason": {
+        "type": "string",
+        "enum": ["end_turn", "tool_use", "max_tokens", "refusal", "other"],
+        "title": "ModelStopReason"
+      },
+      "ModelStreamReset": {
+        "properties": {
+          "run_id": {
+            "type": "string",
+            "title": "Run Id"
+          },
+          "ts": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Ts"
+          },
+          "seq": {
+            "type": "null",
+            "title": "Seq"
+          },
+          "type": {
+            "type": "string",
+            "const": "model_stream_reset",
+            "title": "Type",
+            "default": "model_stream_reset"
+          },
+          "step": {
+            "type": "integer",
+            "title": "Step"
+          },
+          "reason": {
+            "type": "string",
+            "title": "Reason"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["run_id", "ts", "step", "reason"],
+        "title": "ModelStreamReset",
+        "description": "The model stream failed and is being retried. Discard deltas shown for this step."
+      },
+      "NewMessage": {
+        "properties": {
+          "text": {
+            "type": "string",
+            "maxLength": 20000,
+            "minLength": 1,
+            "title": "Text"
+          },
+          "model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["text"],
+        "title": "NewMessage"
+      },
+      "OpaqueBlock": {
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "opaque",
+            "title": "Type",
+            "default": "opaque"
+          },
+          "provider": {
+            "type": "string",
+            "title": "Provider"
+          },
+          "kind": {
+            "type": "string",
+            "title": "Kind"
+          },
+          "data": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/JsonValue"
+            },
+            "type": "object",
+            "title": "Data"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["provider", "kind", "data"],
+        "title": "OpaqueBlock",
+        "description": "A provider-native block the harness does not interpret but must replay verbatim.\n\nThinking blocks are the main case: current Claude models reject a history in\nwhich they were altered or dropped selectively. ``data`` is the provider's own\nJSON for the block; ``provider`` says which provider can read it back."
+      },
+      "Provenance": {
+        "type": "string",
+        "enum": ["trusted", "untrusted"],
+        "title": "Provenance",
+        "description": "Where content came from, which decides whether it may be treated as instructions.\n\n``UNTRUSTED`` content (web pages, email, documents, third-party APIs) is data.\nThe harness wraps it in delimited blocks before the model sees it."
+      },
+      "RunAccepted": {
+        "properties": {
+          "thread_id": {
+            "type": "string",
+            "title": "Thread Id"
+          },
+          "run_id": {
+            "type": "string",
+            "title": "Run Id"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["thread_id", "run_id"],
+        "title": "RunAccepted"
+      },
+      "RunDetail": {
+        "properties": {
+          "run": {
+            "$ref": "#/components/schemas/RunSummary"
+          },
+          "events": {
+            "items": {
+              "$ref": "#/components/schemas/RunEvent"
+            },
+            "type": "array",
+            "title": "Events"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["run", "events"],
+        "title": "RunDetail",
+        "description": "A run with its durable event log: enough to render the turn or its trace."
+      },
+      "RunEvent": {
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/RunStarted"
+          },
+          {
+            "$ref": "#/components/schemas/RunResumed"
+          },
+          {
+            "$ref": "#/components/schemas/StepStarted"
+          },
+          {
+            "$ref": "#/components/schemas/ModelCallFinished"
+          },
+          {
+            "$ref": "#/components/schemas/ModelStreamReset"
+          },
+          {
+            "$ref": "#/components/schemas/StepFinished"
+          },
+          {
+            "$ref": "#/components/schemas/TextMessageStart"
+          },
+          {
+            "$ref": "#/components/schemas/TextMessageDelta"
+          },
+          {
+            "$ref": "#/components/schemas/TextMessageEnd"
+          },
+          {
+            "$ref": "#/components/schemas/ToolCallStart"
+          },
+          {
+            "$ref": "#/components/schemas/ToolCallArgs"
+          },
+          {
+            "$ref": "#/components/schemas/ToolCallEnd"
+          },
+          {
+            "$ref": "#/components/schemas/ToolCallResult"
+          },
+          {
+            "$ref": "#/components/schemas/ToolCallUncertain"
+          },
+          {
+            "$ref": "#/components/schemas/ApprovalRequested"
+          },
+          {
+            "$ref": "#/components/schemas/BudgetUpdated"
+          },
+          {
+            "$ref": "#/components/schemas/ContextCompacted"
+          },
+          {
+            "$ref": "#/components/schemas/CheckpointWritten"
+          },
+          {
+            "$ref": "#/components/schemas/RunFinished"
+          }
+        ],
+        "discriminator": {
+          "propertyName": "type",
+          "mapping": {
+            "approval_requested": "#/components/schemas/ApprovalRequested",
+            "budget_updated": "#/components/schemas/BudgetUpdated",
+            "checkpoint_written": "#/components/schemas/CheckpointWritten",
+            "context_compacted": "#/components/schemas/ContextCompacted",
+            "model_call_finished": "#/components/schemas/ModelCallFinished",
+            "model_stream_reset": "#/components/schemas/ModelStreamReset",
+            "run_finished": "#/components/schemas/RunFinished",
+            "run_resumed": "#/components/schemas/RunResumed",
+            "run_started": "#/components/schemas/RunStarted",
+            "step_finished": "#/components/schemas/StepFinished",
+            "step_started": "#/components/schemas/StepStarted",
+            "text_message_delta": "#/components/schemas/TextMessageDelta",
+            "text_message_end": "#/components/schemas/TextMessageEnd",
+            "text_message_start": "#/components/schemas/TextMessageStart",
+            "tool_call_args": "#/components/schemas/ToolCallArgs",
+            "tool_call_end": "#/components/schemas/ToolCallEnd",
+            "tool_call_result": "#/components/schemas/ToolCallResult",
+            "tool_call_start": "#/components/schemas/ToolCallStart",
+            "tool_call_uncertain": "#/components/schemas/ToolCallUncertain"
+          }
+        }
+      },
+      "RunFinished": {
+        "properties": {
+          "run_id": {
+            "type": "string",
+            "title": "Run Id"
+          },
+          "ts": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Ts"
+          },
+          "seq": {
+            "type": "integer",
+            "title": "Seq"
+          },
+          "type": {
+            "type": "string",
+            "const": "run_finished",
+            "title": "Type",
+            "default": "run_finished"
+          },
+          "stop_reason": {
+            "$ref": "#/components/schemas/StopReason"
+          },
+          "output_text": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Output Text"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "usage": {
+            "$ref": "#/components/schemas/Usage"
+          },
+          "cost_usd": {
+            "type": "number",
+            "title": "Cost Usd"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["run_id", "ts", "seq", "stop_reason", "usage", "cost_usd"],
+        "title": "RunFinished",
+        "description": "The loop stopped. For pauses the run can continue later; otherwise it is final."
+      },
+      "RunResumed": {
+        "properties": {
+          "run_id": {
+            "type": "string",
+            "title": "Run Id"
+          },
+          "ts": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Ts"
+          },
+          "seq": {
+            "type": "integer",
+            "title": "Seq"
+          },
+          "type": {
+            "type": "string",
+            "const": "run_resumed",
+            "title": "Type",
+            "default": "run_resumed"
+          },
+          "attempt": {
+            "type": "integer",
+            "title": "Attempt"
+          },
+          "from_step": {
+            "type": "integer",
+            "title": "From Step"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["run_id", "ts", "seq", "attempt", "from_step"],
+        "title": "RunResumed",
+        "description": "A process picked up an existing run from its checkpoint."
+      },
+      "RunStarted": {
+        "properties": {
+          "run_id": {
+            "type": "string",
+            "title": "Run Id"
+          },
+          "ts": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Ts"
+          },
+          "seq": {
+            "type": "integer",
+            "title": "Seq"
+          },
+          "type": {
+            "type": "string",
+            "const": "run_started",
+            "title": "Type",
+            "default": "run_started"
+          },
+          "model": {
+            "type": "string",
+            "title": "Model"
+          },
+          "input": {
+            "type": "string",
+            "title": "Input"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["run_id", "ts", "seq", "model", "input"],
+        "title": "RunStarted"
+      },
+      "RunStatus": {
+        "type": "string",
+        "enum": ["queued", "running", "paused", "finished"],
+        "title": "RunStatus"
+      },
+      "RunSummary": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "thread_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Thread Id"
+          },
+          "input": {
+            "type": "string",
+            "title": "Input"
+          },
+          "model": {
+            "type": "string",
+            "title": "Model"
+          },
+          "status": {
+            "$ref": "#/components/schemas/RunStatus"
+          },
+          "stop_reason": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/StopReason"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "output_text": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Output Text"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "cost_usd": {
+            "type": "number",
+            "title": "Cost Usd"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "thread_id",
+          "input",
+          "model",
+          "status",
+          "stop_reason",
+          "output_text",
+          "error",
+          "cost_usd",
+          "created_at"
+        ],
+        "title": "RunSummary",
+        "description": "One turn: the user's input and how the run that answered it ended."
+      },
+      "StepFinished": {
+        "properties": {
+          "run_id": {
+            "type": "string",
+            "title": "Run Id"
+          },
+          "ts": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Ts"
+          },
+          "seq": {
+            "type": "integer",
+            "title": "Seq"
+          },
+          "type": {
+            "type": "string",
+            "const": "step_finished",
+            "title": "Type",
+            "default": "step_finished"
+          },
+          "step": {
+            "type": "integer",
+            "title": "Step"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["run_id", "ts", "seq", "step"],
+        "title": "StepFinished",
+        "description": "The step's model call and its whole tool batch are done and checkpointed."
+      },
+      "StepStarted": {
+        "properties": {
+          "run_id": {
+            "type": "string",
+            "title": "Run Id"
+          },
+          "ts": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Ts"
+          },
+          "seq": {
+            "type": "integer",
+            "title": "Seq"
+          },
+          "type": {
+            "type": "string",
+            "const": "step_started",
+            "title": "Type",
+            "default": "step_started"
+          },
+          "step": {
+            "type": "integer",
+            "title": "Step"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["run_id", "ts", "seq", "step"],
+        "title": "StepStarted"
+      },
+      "StopReason": {
+        "type": "string",
+        "enum": [
+          "completed",
+          "budget_exceeded",
+          "awaiting_approval",
+          "awaiting_input",
+          "cancelled",
+          "refused",
+          "failed"
+        ],
+        "title": "StopReason",
+        "description": "Why the loop stopped. Every exit from the loop names exactly one."
+      },
+      "TextBlock": {
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "text",
+            "title": "Type",
+            "default": "text"
+          },
+          "text": {
+            "type": "string",
+            "title": "Text"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["text"],
+        "title": "TextBlock"
+      },
+      "TextMessageDelta": {
+        "properties": {
+          "run_id": {
+            "type": "string",
+            "title": "Run Id"
+          },
+          "ts": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Ts"
+          },
+          "seq": {
+            "type": "null",
+            "title": "Seq"
+          },
+          "type": {
+            "type": "string",
+            "const": "text_message_delta",
+            "title": "Type",
+            "default": "text_message_delta"
+          },
+          "message_id": {
+            "type": "string",
+            "title": "Message Id"
+          },
+          "delta": {
+            "type": "string",
+            "title": "Delta"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["run_id", "ts", "message_id", "delta"],
+        "title": "TextMessageDelta"
+      },
+      "TextMessageEnd": {
+        "properties": {
+          "run_id": {
+            "type": "string",
+            "title": "Run Id"
+          },
+          "ts": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Ts"
+          },
+          "seq": {
+            "type": "integer",
+            "title": "Seq"
+          },
+          "type": {
+            "type": "string",
+            "const": "text_message_end",
+            "title": "Type",
+            "default": "text_message_end"
+          },
+          "message_id": {
+            "type": "string",
+            "title": "Message Id"
+          },
+          "text": {
+            "type": "string",
+            "title": "Text"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["run_id", "ts", "seq", "message_id", "text"],
+        "title": "TextMessageEnd"
+      },
+      "TextMessageStart": {
+        "properties": {
+          "run_id": {
+            "type": "string",
+            "title": "Run Id"
+          },
+          "ts": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Ts"
+          },
+          "seq": {
+            "type": "null",
+            "title": "Seq"
+          },
+          "type": {
+            "type": "string",
+            "const": "text_message_start",
+            "title": "Type",
+            "default": "text_message_start"
+          },
+          "message_id": {
+            "type": "string",
+            "title": "Message Id"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["run_id", "ts", "message_id"],
+        "title": "TextMessageStart"
+      },
+      "Thread": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["id", "title", "created_at", "updated_at"],
+        "title": "Thread"
+      },
+      "ThreadDetail": {
+        "properties": {
+          "thread": {
+            "$ref": "#/components/schemas/Thread"
+          },
+          "runs": {
+            "items": {
+              "$ref": "#/components/schemas/RunDetail"
+            },
+            "type": "array",
+            "title": "Runs"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["thread", "runs"],
+        "title": "ThreadDetail"
+      },
+      "ToolCallArgs": {
+        "properties": {
+          "run_id": {
+            "type": "string",
+            "title": "Run Id"
+          },
+          "ts": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Ts"
+          },
+          "seq": {
+            "type": "null",
+            "title": "Seq"
+          },
+          "type": {
+            "type": "string",
+            "const": "tool_call_args",
+            "title": "Type",
+            "default": "tool_call_args"
+          },
+          "tool_call_id": {
+            "type": "string",
+            "title": "Tool Call Id"
+          },
+          "delta": {
+            "type": "string",
+            "title": "Delta"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["run_id", "ts", "tool_call_id", "delta"],
+        "title": "ToolCallArgs"
+      },
+      "ToolCallEnd": {
+        "properties": {
+          "run_id": {
+            "type": "string",
+            "title": "Run Id"
+          },
+          "ts": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Ts"
+          },
+          "seq": {
+            "type": "integer",
+            "title": "Seq"
+          },
+          "type": {
+            "type": "string",
+            "const": "tool_call_end",
+            "title": "Type",
+            "default": "tool_call_end"
+          },
+          "tool_call_id": {
+            "type": "string",
+            "title": "Tool Call Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "input": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/JsonValue"
+            },
+            "type": "object",
+            "title": "Input"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["run_id", "ts", "seq", "tool_call_id", "name", "input"],
+        "title": "ToolCallEnd",
+        "description": "The model finished writing the call. ``input`` is the complete, parsed input."
+      },
+      "ToolCallResult": {
+        "properties": {
+          "run_id": {
+            "type": "string",
+            "title": "Run Id"
+          },
+          "ts": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Ts"
+          },
+          "seq": {
+            "type": "integer",
+            "title": "Seq"
+          },
+          "type": {
+            "type": "string",
+            "const": "tool_call_result",
+            "title": "Type",
+            "default": "tool_call_result"
+          },
+          "tool_call_id": {
+            "type": "string",
+            "title": "Tool Call Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "output": {
+            "type": "string",
+            "title": "Output"
+          },
+          "is_error": {
+            "type": "boolean",
+            "title": "Is Error"
+          },
+          "provenance": {
+            "$ref": "#/components/schemas/Provenance"
+          },
+          "truncated": {
+            "type": "boolean",
+            "title": "Truncated",
+            "default": false
+          },
+          "blob_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Blob Id"
+          },
+          "duration_ms": {
+            "type": "integer",
+            "title": "Duration Ms"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "run_id",
+          "ts",
+          "seq",
+          "tool_call_id",
+          "name",
+          "output",
+          "is_error",
+          "provenance",
+          "duration_ms"
+        ],
+        "title": "ToolCallResult"
+      },
+      "ToolCallStart": {
+        "properties": {
+          "run_id": {
+            "type": "string",
+            "title": "Run Id"
+          },
+          "ts": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Ts"
+          },
+          "seq": {
+            "type": "null",
+            "title": "Seq"
+          },
+          "type": {
+            "type": "string",
+            "const": "tool_call_start",
+            "title": "Type",
+            "default": "tool_call_start"
+          },
+          "tool_call_id": {
+            "type": "string",
+            "title": "Tool Call Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["run_id", "ts", "tool_call_id", "name"],
+        "title": "ToolCallStart"
+      },
+      "ToolCallUncertain": {
+        "properties": {
+          "run_id": {
+            "type": "string",
+            "title": "Run Id"
+          },
+          "ts": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Ts"
+          },
+          "seq": {
+            "type": "integer",
+            "title": "Seq"
+          },
+          "type": {
+            "type": "string",
+            "const": "tool_call_uncertain",
+            "title": "Type",
+            "default": "tool_call_uncertain"
+          },
+          "tool_call_id": {
+            "type": "string",
+            "title": "Tool Call Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["run_id", "ts", "seq", "tool_call_id", "name"],
+        "title": "ToolCallUncertain",
+        "description": "A non-idempotent call was interrupted; its outcome is unknown. The run pauses."
+      },
+      "ToolResultBlock": {
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "tool_result",
+            "title": "Type",
+            "default": "tool_result"
+          },
+          "tool_use_id": {
+            "type": "string",
+            "title": "Tool Use Id"
+          },
+          "content": {
+            "type": "string",
+            "title": "Content"
+          },
+          "is_error": {
+            "type": "boolean",
+            "title": "Is Error",
+            "default": false
+          },
+          "provenance": {
+            "$ref": "#/components/schemas/Provenance",
+            "default": "trusted"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["tool_use_id", "content"],
+        "title": "ToolResultBlock",
+        "description": "The outcome of a tool call, exactly as the model saw it.\n\n``content`` is already truncated and, for untrusted tools, already wrapped."
+      },
+      "ToolUseBlock": {
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "tool_use",
+            "title": "Type",
+            "default": "tool_use"
+          },
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "input": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/JsonValue"
+            },
+            "type": "object",
+            "title": "Input"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["id", "name", "input"],
+        "title": "ToolUseBlock",
+        "description": "The model asking for a tool to be called."
+      },
+      "Usage": {
+        "properties": {
+          "input_tokens": {
+            "type": "integer",
+            "title": "Input Tokens",
+            "default": 0
+          },
+          "output_tokens": {
+            "type": "integer",
+            "title": "Output Tokens",
+            "default": 0
+          },
+          "cache_read_input_tokens": {
+            "type": "integer",
+            "title": "Cache Read Input Tokens",
+            "default": 0
+          },
+          "cache_creation_input_tokens": {
+            "type": "integer",
+            "title": "Cache Creation Input Tokens",
+            "default": 0
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "Usage",
+        "description": "Token counts for one model call, or a running total.\n\n``input_tokens`` counts only uncached input, as the Anthropic API reports it."
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "ctx": {
+            "type": "object",
+            "title": "Context"
+          }
+        },
+        "type": "object",
+        "required": ["loc", "msg", "type"],
+        "title": "ValidationError"
+      }
+    }
+  }
+}

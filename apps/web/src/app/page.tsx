@@ -1,50 +1,56 @@
-import { Button } from "@/components/ui/button";
+"use client";
 
-const milestones = [
-  { id: "M0", name: "Scaffold", state: "current" },
-  { id: "M1", name: "Harness core", state: "next" },
-  { id: "M2", name: "API + chat UI", state: "later" },
-] as const;
+import { useRouter } from "next/navigation";
+import { useState } from "react";
+import { createThread } from "@/client/sdk.gen";
+import { Composer } from "@/components/composer";
+import { announceThreadsChanged, errorMessage } from "@/lib/api";
 
-export default function Home() {
+const EXAMPLES = [
+  "What's new in agent evals this month? Cite your sources.",
+  "What time is it in Coimbatore right now?",
+  "Plan a three-step comparison of Postgres queue libraries.",
+];
+
+export default function NewChat() {
+  const router = useRouter();
+  const [error, setError] = useState<string | null>(null);
+
+  async function start(text: string): Promise<boolean> {
+    setError(null);
+    const { data, error: failure } = await createThread({ body: { text } });
+    if (!data) {
+      setError(errorMessage(failure));
+      return false;
+    }
+    announceThreadsChanged();
+    router.push(`/threads/${data.thread_id}`);
+    return true;
+  }
+
   return (
-    <main className="mx-auto flex min-h-dvh max-w-xl flex-col justify-center gap-8 px-4 py-16">
-      <header className="space-y-2">
-        <p className="text-muted-foreground text-sm">
-          Always-on personal agent
-        </p>
+    <div className="mx-auto flex w-full max-w-2xl flex-1 flex-col justify-center gap-6 px-4 py-16">
+      <header className="space-y-1">
         <h1 className="font-semibold text-3xl tracking-tight">Kairos</h1>
         <p className="text-muted-foreground">
-          The web UI arrives in M2. This page only confirms the toolchain works.
+          Your always-on agent. Ask a question to start a thread.
         </p>
       </header>
-      <ul className="divide-y rounded-lg border">
-        {milestones.map((m) => (
-          <li
-            key={m.id}
-            className="flex items-center justify-between px-4 py-3"
-          >
-            <span>
-              <span className="font-mono text-muted-foreground text-sm">
-                {m.id}
-              </span>{" "}
-              {m.name}
-            </span>
-            <span className="text-muted-foreground text-sm">{m.state}</span>
+      <Composer onSend={start} />
+      {error && <p className="text-destructive text-sm">{error}</p>}
+      <ul className="flex flex-wrap gap-2">
+        {EXAMPLES.map((example) => (
+          <li key={example}>
+            <button
+              type="button"
+              onClick={() => void start(example)}
+              className="rounded-full border px-3 py-1 text-muted-foreground text-sm hover:bg-muted hover:text-foreground"
+            >
+              {example}
+            </button>
           </li>
         ))}
       </ul>
-      <div>
-        <Button
-          variant="outline"
-          nativeButton={false}
-          render={
-            <a href="https://github.com/CopilotKit/openfuse">
-              Reference: OpenFuse
-            </a>
-          }
-        />
-      </div>
-    </main>
+    </div>
   );
 }

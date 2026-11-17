@@ -47,7 +47,7 @@ Channels:
 | Channel | How | Notes |
 |---|---|---|
 | console | structured log | always on |
-| email | SMTP with STARTTLS; Gmail with an app password (owner's choice) | the recipient is fixed to `KAIROS_EMAIL_TO`; SES replaces it in M8 |
+| email | Amazon SES API v2 with a send-only IAM policy (owner's choice, revised 2026-11-17) | the recipient is fixed to `KAIROS_EMAIL_TO`; plain SMTP remains as an option |
 | push | Web Push with VAPID, self-hosted keys (`kairos vapid-keys`) | expired subscriptions (404/410) are dropped |
 
 System notifications (alerts, the digest) are delivered without approval. Approval applies to actions the *agent* chooses to take.
@@ -55,6 +55,10 @@ System notifications (alerts, the digest) are delivered without approval. Approv
 ### 5. The weekly digest is data, not a model call
 
 A built-in job (`job_weekly_digest`, Sunday 18:00 America/Toronto) builds the digest in code. It covers the week's alerts, each job's runs and failures with its latest observation, pending approvals, run count and spend. It is created once at worker start; the owner can pause or reschedule it like any job. A digest firing records a job run with no agent run.
+
+### 6. Email through SES, not a Gmail app password (revised)
+
+The owner first chose Gmail SMTP with an app password, then switched to SES before any credential was created. A Gmail app password grants full mailbox access over IMAP and SMTP and bypasses 2-Step Verification; Kairos only needs to send to one address. The SES credentials are limited by IAM to `ses:SendEmail` on one verified identity, with `ses:FromAddress` and `ses:Recipients` conditions, and come from an AWS SSO profile rather than a long-lived key in `.env`. Setup steps: [`docs/ses-setup.md`](../ses-setup.md).
 
 ## Consequences
 

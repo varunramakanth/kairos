@@ -98,5 +98,5 @@ sequenceDiagram
 | [005](adr/005-cassettes.md) | Cassettes at the provider boundary and at HTTP level |
 | [007](adr/007-live-events.md) | Live events from worker to API over Postgres `LISTEN/NOTIFY` |
 | [008](adr/008-web-search.md) | Web search as a client-side tool on Tavily; own `web_fetch` with an SSRF guard |
-| [010](adr/010-approvals-and-notifications.md) | Strict approvals in a policy hook; audit log; notifications through an outbox (console, Gmail SMTP, Web Push); digest built from data |
+| [010](adr/010-approvals-and-notifications.md) | Strict approvals in a policy hook; audit log; notifications through an outbox (console, Amazon SES, Web Push); digest built from data |
 | [009](adr/009-scheduler-and-watches.md) | Each job firing is an agent run; watches: the model observes, code decides; user confirms agent-made jobs |

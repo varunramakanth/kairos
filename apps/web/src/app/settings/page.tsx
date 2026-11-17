@@ -128,10 +128,11 @@ export default function SettingsPage() {
           </>
         ) : (
           <p className="text-muted-foreground text-sm">
-            Not set up. Add <code>KAIROS_EMAIL_TO</code>,{" "}
-            <code>KAIROS_SMTP_USERNAME</code> and{" "}
-            <code>KAIROS_SMTP_PASSWORD</code> (a Gmail app password) to{" "}
-            <code>.env</code> and restart the API.
+            Not set up. Kairos sends email through Amazon SES with a send-only
+            key. Set <code>KAIROS_EMAIL_PROVIDER=ses</code> and{" "}
+            <code>KAIROS_EMAIL_TO</code> and <code>KAIROS_SES_PROFILE</code> in{" "}
+            <code>.env</code>, and restart the API. Steps:{" "}
+            <code>docs/ses-setup.md</code>.
           </p>
         )}
       </section>

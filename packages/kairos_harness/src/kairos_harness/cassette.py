@@ -16,7 +16,7 @@ from pathlib import Path
 
 from kairos_domain.base import DomainModel
 from kairos_domain.errors import KairosError
-from kairos_domain.model import ModelEvent, ModelRequest
+from kairos_domain.model import ModelCompleted, ModelEvent, ModelRequest
 from kairos_harness.protocols import Provider
 
 
@@ -71,13 +71,16 @@ class RecordingProvider:
         events: list[ModelEvent] = []
         async for event in self._inner.stream(request):
             events.append(event)
+            if isinstance(event, ModelCompleted):
+                # Write before yielding: consumers stop iterating at the completion,
+                # so code after the loop would never run. A failed stream never
+                # reaches this point and leaves no entry.
+                entry = CassetteEntry(
+                    fingerprint=fingerprint(request), summary=_summary(request), events=events
+                )
+                with self._path.open("a") as file:
+                    file.write(entry.model_dump_json() + "\n")
             yield event
-        # Only complete calls are recorded; a failed stream leaves no entry.
-        entry = CassetteEntry(
-            fingerprint=fingerprint(request), summary=_summary(request), events=events
-        )
-        with self._path.open("a") as file:
-            file.write(entry.model_dump_json() + "\n")
 
 
 class ReplayProvider:

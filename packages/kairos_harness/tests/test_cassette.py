@@ -67,3 +67,14 @@ def test_fingerprint_depends_on_everything_the_answer_depends_on() -> None:
     assert fingerprint(base) != fingerprint(base.model_copy(update={"system": "other"}))
     assert fingerprint(base) != fingerprint(base.model_copy(update={"model": "claude-haiku-5-5"}))
     assert fingerprint(base) != fingerprint(base.model_copy(update={"effort": "low"}))
+
+
+async def test_call_is_recorded_even_if_the_consumer_stops_at_the_completion(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "cassette.jsonl"
+    recorder = RecordingProvider(ScriptedProvider([text_turn("x")]), path)
+    async for event in recorder.stream(request()):
+        if isinstance(event, ModelCompleted):
+            break  # the agent loop does exactly this
+    assert len(load_cassette(path)) == 1

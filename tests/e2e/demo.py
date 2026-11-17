@@ -13,6 +13,7 @@ from typing import Any
 
 from pydantic import JsonValue
 
+from kairos_domain.governance import Notification
 from kairos_domain.jobs import Job
 from kairos_domain.run import RunRequest
 from kairos_harness import AgentLoop, InMemoryCheckpointer
@@ -65,6 +66,10 @@ class _SpecsOnly:
         raise NotImplementedError
 
 
+async def _no_notify(notification: Notification, key: str) -> None:
+    raise NotImplementedError
+
+
 async def record() -> None:
     """Record with the same tool set the API offers (schedule tools included)."""
     CASSETTE.unlink(missing_ok=True)
@@ -72,7 +77,7 @@ async def record() -> None:
     async with http_client() as http:
         loop = AgentLoop(
             provider=RecordingProvider(ScriptedProvider(SCRIPT, name="anthropic"), CASSETTE),
-            tools=build_tools(settings, http, jobs=_SpecsOnly()),
+            tools=build_tools(settings, http, jobs=_SpecsOnly(), notify=_no_notify),
             checkpointer=InMemoryCheckpointer(),
         )
         request = RunRequest(run_id="demo", input=PROMPT, model=MODEL)

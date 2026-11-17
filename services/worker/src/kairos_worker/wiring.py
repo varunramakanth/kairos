@@ -18,6 +18,7 @@ from kairos_harness import (
     ToolExecutor,
 )
 from kairos_harness.cassette import ReplayProvider
+from kairos_notify.tools import Enqueue, notify_tool
 from kairos_providers import anthropic_provider, bedrock_provider
 from kairos_scheduler.protocols import JobRepository
 from kairos_scheduler.tools import record_observation_tool, schedule_tools
@@ -53,12 +54,13 @@ def build_tools(
     http: httpx2.AsyncClient,
     *,
     jobs: JobRepository | None = None,
+    notify: Enqueue | None = None,
     clock: Clock | None = None,
 ) -> ToolRegistry:
     """The tool set, in a fixed order (the order is part of the cached prompt prefix).
 
-    The schedule tools need the job store, so they are only offered when ``jobs`` is
-    given (not in the database-free ``kairos run``).
+    The schedule tools and ``notify_me`` need the database, so they are only offered
+    when ``jobs`` and ``notify`` are given (not in the database-free ``kairos run``).
     """
     clock = clock or SystemClock()
     tools = ToolRegistry([current_time_tool(clock.now), plan_tool()])
@@ -71,6 +73,8 @@ def build_tools(
     if jobs is not None:
         for item in schedule_tools(jobs, clock, timezone=settings.timezone):
             tools.register(item)
+    if notify is not None:
+        tools.register(notify_tool(notify))
     return tools
 
 

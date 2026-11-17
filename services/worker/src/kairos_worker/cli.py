@@ -5,9 +5,11 @@ kairos run "question"                  run once in memory, print the answer
 kairos run "question" --replay FILE    same, served from a cassette (no network)
 kairos enqueue "question"              queue a durable run for a worker
 kairos worker                          claim and execute queued runs
+kairos vapid-keys                      generate Web Push keys for .env
 """
 
 import asyncio
+import base64
 import signal
 import sys
 import uuid
@@ -17,6 +19,8 @@ from typing import Annotated
 
 import structlog
 import typer
+from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric import ec
 
 from kairos_db import RunQueue, create_engine
 from kairos_db.migrate import upgrade
@@ -122,6 +126,22 @@ def worker() -> None:
             await engine.dispose()
 
     asyncio.run(main())
+
+
+@app.command(name="vapid-keys")
+def vapid_keys() -> None:
+    """Generate a Web Push (VAPID) key pair to paste into .env. Prints, stores nothing."""
+    key = ec.generate_private_key(ec.SECP256R1())
+    private = key.private_numbers().private_value.to_bytes(32, "big")
+    public = key.public_key().public_bytes(
+        serialization.Encoding.X962, serialization.PublicFormat.UncompressedPoint
+    )
+
+    def b64(data: bytes) -> str:
+        return base64.urlsafe_b64encode(data).rstrip(b"=").decode()
+
+    typer.echo(f"KAIROS_VAPID_PUBLIC_KEY={b64(public)}")
+    typer.echo(f"KAIROS_VAPID_PRIVATE_KEY={b64(private)}")
 
 
 if __name__ == "__main__":

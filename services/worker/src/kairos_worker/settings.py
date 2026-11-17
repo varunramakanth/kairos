@@ -41,8 +41,38 @@ class Settings(BaseSettings):
     )
     """Enables ``web_search``. Without it the tool is not offered to the model."""
 
-    @field_validator("tavily_api_key", mode="before")
+    # --- notifications (M4) ---------------------------------------------------------
+    email_to: str | None = None
+    """The owner's address. Email can only ever go here."""
+    smtp_username: str | None = None
+    smtp_password: SecretStr | None = None
+    """For Gmail: an app password (Google Account > Security > App passwords)."""
+    smtp_host: str = "smtp.gmail.com"
+    smtp_port: int = 587
+    vapid_public_key: str | None = None
+    vapid_private_key: SecretStr | None = None
+    """Web Push keys; generate them with ``kairos vapid-keys``."""
+    web_base_url: str = "http://localhost:3000"
+    """Where links in notifications point."""
+
+    @field_validator(
+        "tavily_api_key",
+        "email_to",
+        "smtp_username",
+        "smtp_password",
+        "vapid_public_key",
+        "vapid_private_key",
+        mode="before",
+    )
     @classmethod
     def _blank_is_unset(cls, value: object) -> object:
-        # `TAVILY_API_KEY=` in a .env file means "not configured", not an empty key.
+        # `KEY=` in a .env file means "not configured", not an empty value.
         return None if value == "" else value
+
+    @property
+    def email_configured(self) -> bool:
+        return bool(self.email_to and self.smtp_username and self.smtp_password)
+
+    @property
+    def push_configured(self) -> bool:
+        return bool(self.vapid_public_key and self.vapid_private_key)

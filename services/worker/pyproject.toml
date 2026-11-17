@@ -4,9 +4,12 @@ version = "0.1.0"
 description = "Durable run executor and scheduler loop."
 requires-python = ">=3.12"
 dependencies = [
+    "cryptography>=46",
     "kairos-db",
     "kairos-domain",
     "kairos-harness",
+    "kairos-notify",
+    "kairos-policy",
     "kairos-providers",
     "kairos-scheduler",
     "kairos-telemetry",
@@ -31,3 +34,5 @@ kairos-tools = { workspace = true }
 kairos-db = { workspace = true }
 kairos-telemetry = { workspace = true }
 kairos-scheduler = { workspace = true }
+kairos-policy = { workspace = true }
+kairos-notify = { workspace = true }

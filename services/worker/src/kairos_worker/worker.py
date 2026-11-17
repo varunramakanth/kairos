@@ -1,7 +1,7 @@
 """The worker: claims due runs and drives each one through a harness."""
 
 import asyncio
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from contextlib import suppress
 
 import structlog
@@ -9,7 +9,7 @@ import structlog
 from kairos_db import Lease, RunQueue
 from kairos_domain.errors import LostLeaseError
 from kairos_domain.events import RunEvent
-from kairos_harness import Harness
+from kairos_harness import Harness, RunContext
 
 log = structlog.get_logger(__name__)
 
@@ -34,6 +34,7 @@ class Worker:
         poll_seconds: float = 1.0,
         max_attempts: int = 5,
         on_event: Callable[[RunEvent], None] | None = None,
+        context_for: Callable[[Lease], Awaitable[RunContext]] | None = None,
     ) -> None:
         self._queue = queue
         self._build_harness = build_harness
@@ -41,6 +42,7 @@ class Worker:
         self._poll = poll_seconds
         self._max_attempts = max_attempts
         self._on_event = on_event
+        self._context_for = context_for
 
     async def run_once(self) -> str | None:
         """Claim and execute one run. Returns its id, or ``None`` if nothing was due."""
@@ -80,9 +82,10 @@ class Worker:
 
     async def _execute(self, lease: Lease) -> None:
         harness = self._build_harness(lease)
+        context = await self._context_for(lease) if self._context_for else None
         heartbeat = asyncio.create_task(self._heartbeat(lease))
         try:
-            async for event in harness.run(lease.request):
+            async for event in harness.run(lease.request, context):
                 if self._on_event:
                     self._on_event(event)
         except LostLeaseError:

@@ -132,7 +132,7 @@ This is where the codebase earns its "state of the art" label. It should be a cl
 >
 > Python specifics: fully async (`asyncio.TaskGroup` for parallel tool calls), structured concurrency with cancellation, Pydantic models for every message/event/tool schema. Both providers use the `anthropic` SDK behind the provider interface: `AsyncAnthropic` for the Anthropic API and `AsyncAnthropicBedrockMantle` for Bedrock, sharing one Messages translation layer. A Converse (`aioboto3`) adapter can be added behind the same Protocol if non-Claude Bedrock models are ever needed.
 >
-> Test determinism (ADR-005): cassettes at two levels. Model calls are recorded at the provider boundary as JSONL of normalized model events; plain-HTTP tools use `vcrpy`. `anthropic` 1.x uses `httpx2`, so `httpx2.alias_httpx()` must run before `vcrpy`/`respx` load.
+> Test determinism (ADR-005): cassettes at two levels. Model calls are recorded at the provider boundary as JSONL of normalized model events; plain-HTTP tools use `vcrpy`. `anthropic` (1.0 and later; 2.9 today) uses `httpx2`, so `httpx2.alias_httpx()` must run before `vcrpy`/`respx` load.
 
 ### 3.2 Scheduling and watches (`packages/kairos_scheduler`)
 

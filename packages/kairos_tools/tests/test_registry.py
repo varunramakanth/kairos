@@ -89,3 +89,23 @@ def test_registration_errors_are_caught_at_import_time() -> None:
         @tool()
         async def undocumented(args: SearchInput, context: ToolContext) -> str:  # pyright: ignore[reportUnusedFunction]
             return args.query
+
+
+async def test_current_time_tool_uses_the_injected_clock_and_handles_dst() -> None:
+    from datetime import UTC, datetime
+
+    from kairos_tools.builtin import current_time_tool
+
+    # 06:30 UTC on 1 Nov 2026 is 01:30 in Toronto, after clocks fell back at 02:00 EDT.
+    clock_tool = current_time_tool(lambda: datetime(2026, 11, 1, 6, 30, tzinfo=UTC))
+    registry = ToolRegistry([clock_tool])
+
+    toronto = await registry.execute(
+        ToolCallRecord(id="t1", name="current_time", input={}), CONTEXT
+    )
+    assert toronto.content == "2026-11-01T01:30:00-05:00 (America/Toronto)"
+
+    bad = await registry.execute(
+        ToolCallRecord(id="t2", name="current_time", input={"timezone": "Mars/Olympus"}), CONTEXT
+    )
+    assert bad == ToolOutput(content="unknown timezone: Mars/Olympus", is_error=True)

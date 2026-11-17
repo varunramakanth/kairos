@@ -45,3 +45,23 @@ class ToolContext(DomainModel):
     tool_call_id: str
     idempotency_key: str
     """Stable across retries of this call. Pass it to external APIs that support one."""
+
+
+class Allow(DomainModel):
+    """Run the tool call."""
+
+
+class Deny(DomainModel):
+    """Do not run it; the model receives ``reason`` as an error result."""
+
+    reason: str
+
+
+class RequireApproval(DomainModel):
+    """Pause the run until a human decides."""
+
+    reason: str
+
+
+type ToolDecision = Allow | Deny | RequireApproval
+"""What a ``before_tool`` hook (policy, guardrails) decides about one call."""

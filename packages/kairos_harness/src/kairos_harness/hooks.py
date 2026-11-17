@@ -4,8 +4,8 @@ from collections.abc import Sequence
 
 from kairos_domain.model import ModelCompleted, ModelRequest
 from kairos_domain.run import RunState, ToolCallRecord
-from kairos_domain.tools import ToolOutput, ToolSpec
-from kairos_harness.protocols import Allow, Hooks, ToolDecision
+from kairos_domain.tools import Allow, ToolDecision, ToolOutput, ToolSpec
+from kairos_harness.protocols import Hooks
 
 
 class BaseHooks:

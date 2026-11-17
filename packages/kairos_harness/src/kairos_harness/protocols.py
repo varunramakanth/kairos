@@ -15,7 +15,7 @@ from typing import Protocol
 from kairos_domain.events import DurableEvent, RunEvent
 from kairos_domain.model import ModelCompleted, ModelEvent, ModelRequest
 from kairos_domain.run import RunRequest, RunState, ToolCallRecord
-from kairos_domain.tools import ToolContext, ToolOutput, ToolSpec
+from kairos_domain.tools import ToolContext, ToolDecision, ToolOutput, ToolSpec
 
 
 class Provider(Protocol):
@@ -84,28 +84,6 @@ class Clock(Protocol):
 
 class IdGenerator(Protocol):
     def new_id(self, prefix: str) -> str: ...
-
-
-@dataclass(frozen=True)
-class Allow:
-    """Run the tool call."""
-
-
-@dataclass(frozen=True)
-class Deny:
-    """Do not run it; the model receives ``reason`` as an error result."""
-
-    reason: str
-
-
-@dataclass(frozen=True)
-class RequireApproval:
-    """Pause the run until a human decides."""
-
-    reason: str
-
-
-type ToolDecision = Allow | Deny | RequireApproval
 
 
 class Hooks(Protocol):

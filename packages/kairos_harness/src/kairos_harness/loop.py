@@ -55,7 +55,7 @@ from kairos_domain.run import (
     ToolCallRecord,
     ToolCallStatus,
 )
-from kairos_domain.tools import ToolContext, ToolOutput, ToolSpec
+from kairos_domain.tools import Deny, RequireApproval, ToolContext, ToolOutput, ToolSpec
 from kairos_harness.budget import PriceTable, exceeded
 from kairos_harness.clock import SystemClock, UuidIdGenerator
 from kairos_harness.context import build_system_prompt, present_tool_output, truncate
@@ -63,11 +63,9 @@ from kairos_harness.hooks import BaseHooks
 from kairos_harness.protocols import (
     Checkpointer,
     Clock,
-    Deny,
     Hooks,
     IdGenerator,
     Provider,
-    RequireApproval,
     RunContext,
     ToolExecutor,
 )

@@ -28,11 +28,12 @@ jobs:
       - run: uv run ruff format --check .
       - run: uv run ruff check .
       - run: uv run pyright
-      - name: Tests (offline; includes the kairos_evals import-boundary check)
+      - name: Tests (offline; integration tests use Docker via testcontainers)
+        env:
+          KAIROS_REQUIRE_DOCKER: "1"
         run: uv run pytest -m "not evals"
-      - name: Eval suites (offline)
-        # Exit code 5 means "no tests collected": allowed until the first suite lands in M1.
-        run: uv run pytest -m evals || [ $? -eq 5 ]
+      - name: Eval suites (offline, cassette-backed)
+        run: uv run pytest -m evals
 
   web:
     runs-on: ubuntu-latest

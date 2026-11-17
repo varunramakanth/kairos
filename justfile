@@ -59,8 +59,19 @@ test-live *args:
 
 # Run eval suites (offline, cassette-backed)
 evals *args:
-    # pytest exits 5 when nothing is collected; allowed until the first suite lands in M1.
-    uv run pytest -m evals {{ args }} || [ $? -eq 5 ]
+    uv run pytest -m evals {{ args }}
+
+# Rebuild eval cassettes (today: from the synthetic scripts in tests/evals/scenarios.py)
+record-cassettes:
+    uv run python -m tests.evals.record_cassettes
+
+# Apply database migrations to the local Postgres
+migrate:
+    uv run kairos migrate
+
+# Run the durable worker against the local Postgres
+worker:
+    uv run kairos worker
 
 # Regenerate the TypeScript API client from FastAPI's OpenAPI schema (arrives in M2)
 gen-client:

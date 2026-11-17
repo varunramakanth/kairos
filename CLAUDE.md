@@ -13,7 +13,9 @@ Kairos is an always-on personal agent. `PLAN.md` is the source of truth for scop
 | `just fmt` | Format and auto-fix Python and web |
 | `just lint` | Ruff + Biome, no changes |
 | `just typecheck` | pyright strict + `tsc --noEmit` |
-| `just test [pytest args]` | Offline tests |
+| `just test [pytest args]` | Offline tests (integration tests start Postgres via testcontainers; skipped without Docker) |
+| `just migrate` / `just worker` | Migrate the local DB / run the durable worker |
+| `just record-cassettes` | Rebuild eval cassettes |
 | `just evals` | Eval suites (offline) |
 | `just test-live` | Tests marked `live`, with `LIVE=1`. Costs money; ask first |
 | `just check` | Everything CI runs. Must be green before a milestone is done |

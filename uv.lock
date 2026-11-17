@@ -742,12 +742,20 @@ dependencies = [
     { name = "opentelemetry-sdk" },
 ]
 
+[package.dev-dependencies]
+dev = [
+    { name = "kairos-harness" },
+]
+
 [package.metadata]
 requires-dist = [
     { name = "kairos-domain", editable = "packages/kairos_domain" },
     { name = "opentelemetry-exporter-otlp-proto-http", specifier = ">=1.36" },
     { name = "opentelemetry-sdk", specifier = ">=1.36" },
 ]
+
+[package.metadata.requires-dev]
+dev = [{ name = "kairos-harness", editable = "packages/kairos_harness" }]
 
 [[package]]
 name = "kairos-tools"

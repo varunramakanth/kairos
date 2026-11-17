@@ -1,6 +1,6 @@
 # Architecture
 
-This page is the map. `PLAN.md` has the full spec; `docs/adr/` has the reasoning behind each choice.
+This page is the map. `PLAN.md` has the full spec, [harness.md](harness.md) explains the agent loop, and `docs/adr/` has the reasoning behind each choice.
 
 ## System
 
@@ -26,7 +26,7 @@ flowchart TD
 
 ## Package dependencies
 
-Arrows point from a package to what it may import. `kairos_evals` and `kairos_telemetry` import no other Kairos package.
+Arrows point from a package to what it may import. `kairos_evals` imports no other Kairos package.
 
 ```mermaid
 flowchart BT
@@ -41,8 +41,11 @@ flowchart BT
   db[kairos_db] --> domain
   api[services/api] --> domain
   worker[services/worker] --> harness
-  worker --> domain
-  telemetry[kairos_telemetry]
+  worker --> providers
+  worker --> tools
+  worker --> db
+  worker --> telemetry
+  telemetry[kairos_telemetry] --> domain
   evals[kairos_evals]
 ```
 

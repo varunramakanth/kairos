@@ -2,7 +2,7 @@
 
 An always-on personal agent: it chats, runs scheduled jobs and watches, acts through tools behind an approval gate, remembers, and records a trace of every run that can be inspected, replayed and evaluated.
 
-**Status:** M0 (scaffold). There is no agent yet. See [`PLAN.md`](PLAN.md) for the full spec and milestones, and [`docs/adr/`](docs/adr/) for the decisions made so far.
+**Status:** M1 (harness core). The agent loop, both providers, durable runs on Postgres and tracing work; there is no API or UI yet. See [`docs/harness.md`](docs/harness.md). See [`PLAN.md`](PLAN.md) for the full spec and milestones, and [`docs/adr/`](docs/adr/) for the decisions made so far.
 
 ## Quick start
 

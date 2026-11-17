@@ -6,6 +6,8 @@ from typing import Literal
 from pydantic import AliasChoices, Field, SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from kairos_domain.governance import ChannelName
+
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="KAIROS_", env_file=".env", extra="ignore")
@@ -76,3 +78,13 @@ class Settings(BaseSettings):
     @property
     def push_configured(self) -> bool:
         return bool(self.vapid_public_key and self.vapid_private_key)
+
+    @property
+    def channels(self) -> list[ChannelName]:
+        """Configured delivery channels; the console log is always one."""
+        names: list[ChannelName] = ["console"]
+        if self.email_configured:
+            names.append("email")
+        if self.push_configured:
+            names.append("push")
+        return names

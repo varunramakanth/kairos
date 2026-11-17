@@ -74,7 +74,7 @@ def build_tools(
         for item in schedule_tools(jobs, clock, timezone=settings.timezone):
             tools.register(item)
     if notify is not None:
-        tools.register(notify_tool(notify))
+        tools.register(notify_tool(notify, settings.channels))
     return tools
 
 

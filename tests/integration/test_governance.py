@@ -91,7 +91,9 @@ async def test_a_side_effect_waits_for_approval_then_runs_once(
         assert events[-1]["stop_reason"] == "completed"
         assert events[-1]["output_text"] == "Sent you the summary."
         result = next(e for e in events if e["type"] == "tool_call_result")
-        assert result["output"] == "Message queued for delivery to the user."
+        assert result["output"].startswith(
+            "Recorded, but NOT delivered"
+        )  # no email or push in tests
 
         async def all_sent() -> bool:
             statuses = await rows(engine, "SELECT kind, status FROM notifications ORDER BY id")
@@ -101,6 +103,11 @@ async def test_a_side_effect_waits_for_approval_then_runs_once(
             ]
 
         await eventually(all_sent)
+        (message,) = await rows(
+            engine, "SELECT payload, results FROM notifications WHERE kind = 'message'"
+        )
+        assert message.payload["channels"] == ["console"]  # only what is configured
+        assert message.results == {"console": "sent"}
         actions = [r.action for r in await rows(engine, "SELECT action FROM audit_log ORDER BY id")]
         for expected in (
             "approval.requested",

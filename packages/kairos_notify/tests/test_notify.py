@@ -2,9 +2,11 @@ from collections.abc import Mapping, Sequence
 from datetime import UTC, datetime, timedelta
 from email.message import EmailMessage
 
+import pytest
 from pydantic import SecretStr
 
 from kairos_domain.governance import (
+    ChannelName,
     DigestData,
     DigestJob,
     Notification,
@@ -14,6 +16,7 @@ from kairos_domain.governance import (
     PushSubscription,
     StoredNotification,
 )
+from kairos_domain.tools import ToolContext
 from kairos_harness import FakeClock
 from kairos_notify import (
     ChannelError,
@@ -24,6 +27,7 @@ from kairos_notify import (
     WebPushChannel,
     build_digest,
 )
+from kairos_notify.tools import notify_tool
 
 NOW = datetime(2026, 11, 22, 23, 0, tzinfo=UTC)  # Sunday 18:00 in Toronto
 ALERT = Notification(
@@ -212,3 +216,32 @@ def test_digest_summarizes_the_week() -> None:
     assert "31 agent runs this week, $0.43 in model spend." in digest.body
     quiet = build_digest(data.model_copy(update={"alerts": [], "jobs": [], "pending_approvals": 0}))
     assert quiet.title == "Weekly digest: a quiet week"
+
+
+@pytest.mark.parametrize(
+    ("channels", "start"),
+    [
+        (["console", "email", "push"], "Queued for delivery to the user by email and to browsers"),
+        (
+            ["console", "email"],
+            "Queued for delivery to the user by email (browser push is not set up)",
+        ),
+        (["console", "push"], "Queued for browser push to the user (email is not set up)"),
+        (["console"], "Recorded, but NOT delivered"),
+    ],
+)
+async def test_notify_me_says_exactly_where_the_message_went(
+    channels: list[ChannelName], start: str
+) -> None:
+    queued: list[tuple[Notification, str]] = []
+
+    async def enqueue(notification: Notification, key: str) -> None:
+        queued.append((notification, key))
+
+    tool = notify_tool(enqueue, channels)
+    ctx = ToolContext(run_id="r", tool_call_id="t1", idempotency_key="t1")
+    output = await tool({"title": "Hi", "body": "Hello"}, ctx)
+    assert output.content.startswith(start)
+    ((notification, key),) = queued
+    assert notification.channels == channels
+    assert key == "notify:t1"

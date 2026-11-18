@@ -14,12 +14,14 @@ Safety model (ADR-012):
 - **Untrusted output:** snapshots and extracted text are page content; the agent
   wraps them as data.
 
-Known gap: the address check runs per request, and Chromium resolves the name again
-when it connects, so a DNS rebinding attack could still race it. Pinning addresses
-through a filtering proxy is planned for M7 hardening.
+DNS rebinding is closed by the pinning proxy (``proxy.py``, ADR-015): Chromium sends
+every request through it, and the proxy resolves each name once, checks it, and
+connects to the address it checked. The per-request check here stays as an early,
+clearly worded refusal.
 """
 
 from collections.abc import Awaitable, Callable, Mapping
+from contextlib import AsyncExitStack
 from dataclasses import dataclass
 from typing import Any, Literal
 from urllib.parse import urlsplit
@@ -35,6 +37,7 @@ from playwright.async_api import (
 )
 from playwright.async_api import Error as PlaywrightError
 
+from kairos_browser.proxy import PinningProxy
 from kairos_tools.web import (
     BlockedAddressError,
     Resolver,
@@ -112,9 +115,11 @@ class BrowserSession:
         *,
         resolve: Resolver = resolve_host,
         fixtures: Mapping[str, str] | None = None,
-        launcher: Callable[[Playwright], Awaitable[Browser]] | None = None,
+        launcher: Callable[[Playwright, str], Awaitable[Browser]] | None = None,
     ) -> None:
         self._resolve = resolve
+        self._stack = AsyncExitStack()
+        self.proxy: PinningProxy | None = None
         self._fixtures = dict(fixtures or {})
         self._launcher = launcher
         self._playwright: Playwright | None = None
@@ -124,9 +129,10 @@ class BrowserSession:
         self.blocked: list[str] = []
 
     async def start(self) -> None:
+        self.proxy = await self._stack.enter_async_context(PinningProxy(resolve=self._resolve))
         self._playwright = await async_playwright().start()
         launch = self._launcher or _headless_chromium
-        self._browser = await launch(self._playwright)
+        self._browser = await launch(self._playwright, self.proxy.url)
         self._context = await self._browser.new_context(
             accept_downloads=False,
             service_workers="block",
@@ -145,6 +151,7 @@ class BrowserSession:
                 await closer.close()
         if self._playwright is not None:
             await self._playwright.stop()
+        await self._stack.aclose()
 
     @property
     def page(self) -> Page:
@@ -260,8 +267,13 @@ class BrowserSession:
         return await self.snapshot()
 
 
-async def _headless_chromium(playwright: Playwright) -> Browser:
-    return await playwright.chromium.launch(headless=True)
+async def _headless_chromium(playwright: Playwright, proxy_url: str) -> Browser:
+    """Every request, loopback included (``<-loopback>``), goes through the pinning proxy."""
+    return await playwright.chromium.launch(
+        headless=True,
+        proxy={"server": proxy_url},
+        args=["--proxy-bypass-list=<-loopback>"],
+    )
 
 
 def _first_line(error: Exception) -> str:

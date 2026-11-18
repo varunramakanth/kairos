@@ -48,6 +48,7 @@ TOOL_CALLS = "kairos.tool_calls"
 TOOL_RISK = "kairos.tool.risk"
 TOOL_PROVENANCE = "kairos.tool.provenance"
 TOOL_IS_ERROR = "kairos.tool.is_error"
+TOOL_SUSPECTED_INJECTION = "kairos.tool.suspected_injection"
 REQUESTED_TOOL_CALLS = "kairos.requested_tool_calls"
 """On a chat span: JSON list of ``{id, name, arguments}`` the model asked for, whether
 or not policy then let them run (content capture only)."""

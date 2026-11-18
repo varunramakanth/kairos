@@ -24,6 +24,7 @@ from fastapi.sse import EventSourceResponse, ServerSentEvent
 from pydantic import Field
 from sqlalchemy.ext.asyncio import AsyncEngine
 
+from kairos_api.limits import RateLimiter
 from kairos_api.settings import ApiSettings
 from kairos_api.streams import run_event_stream
 from kairos_db import (
@@ -46,7 +47,13 @@ from kairos_db.governance import (
 from kairos_db.memories import MemoryStore
 from kairos_domain.base import DomainModel
 from kairos_domain.content import Message
-from kairos_domain.evals import EvalRunDetail, EvalRunSummary
+from kairos_domain.evals import (
+    CriterionCalibration,
+    EvalRunDetail,
+    EvalRunSummary,
+    ReviewItem,
+    ReviewLabel,
+)
 from kairos_domain.events import RunEvent
 from kairos_domain.governance import (
     Approval,
@@ -62,9 +69,13 @@ from kairos_domain.jobs import Job, JobDetail, JobKind, JobSpec, JobStatus, JobS
 from kairos_domain.memory import Memory, MemoryCreate, MemorySource, MemoryStatus, MemoryUpdate
 from kairos_domain.run import RunRequest
 from kairos_domain.threads import RunDetail, Thread, ThreadDetail
+from kairos_evals.judge import CRITERIA
+from kairos_evals.simulator import CONVERSATION_CRITERIA
+from kairos_evals.stats import cohens_kappa
 from kairos_harness import Provider, SystemClock
 from kairos_scheduler.timing import ScheduleError, next_fire, validate
-from kairos_worker.service import open_runtime, work
+from kairos_worker.service import open_runtime, spend_cap, work
+from kairos_worker.spend import SpendCap
 from kairos_worker.wiring import memory_store
 
 API_VERSION = "0.2.0"
@@ -111,6 +122,17 @@ class Decision(DomainModel):
     """Shown to the model when declining (e.g. "send it tomorrow instead")."""
 
 
+MIN_LABELS = 10
+MIN_KAPPA = 0.6
+JUDGE_QUESTIONS: dict[str, str] = {
+    **CRITERIA,
+    **CONVERSATION_CRITERIA,
+    "recovery": "After a tool failed, did the assistant recover sensibly or say plainly "
+    "what failed, without presenting results it did not get?",
+}
+"""The question each judge criterion answers, shown to the human reviewer."""
+
+
 class AppSettings(DomainModel):
     actions_enabled: bool
     """False while the kill switch is on: every agent action with a side effect is denied."""
@@ -119,6 +141,9 @@ class AppSettings(DomainModel):
     push_configured: bool
     vapid_public_key: str | None
     timezone: str
+    spent_today_usd: float
+    """Model spend so far today (local day), across all runs."""
+    daily_spend_cap_usd: float | None
 
 
 class KillSwitch(DomainModel):
@@ -154,6 +179,7 @@ class Services:
     notifications: NotificationStore
     evals: EvalStore
     memories: MemoryStore
+    spend: SpendCap
 
 
 def _operation_id(route: APIRoute) -> str:
@@ -207,6 +233,7 @@ def create_app(
             notifications=NotificationStore(engine),
             evals=EvalStore(engine),
             memories=memory_store(settings, engine),
+            spend=spend_cap(settings, engine, SystemClock()),
         )
         stop = asyncio.Event()
         async with AsyncExitStack() as stack:
@@ -280,7 +307,25 @@ def create_app(
     async def list_threads(request: Request) -> list[Thread]:
         return await services(request).threads.recent()
 
-    @app.post("/threads", status_code=201, tags=["threads"])
+    limiter = RateLimiter(limit=settings.rate_limit_per_minute, per_seconds=60.0)
+
+    def rate_limited(request: Request) -> None:
+        """Dependency: at most ``rate_limit_per_minute`` work-starting calls per client."""
+        client = request.client.host if request.client else "unknown"
+        if (wait := limiter.check(client)) is not None:
+            raise HTTPException(
+                status_code=429,
+                detail="too many requests; slow down",
+                headers={"Retry-After": str(max(1, round(wait)))},
+            )
+
+    async def admit_run(request: Request) -> None:
+        """Dependency for anything that starts a model run: rate limit and spend cap."""
+        rate_limited(request)
+        if reason := await services(request).spend.blocked():
+            raise HTTPException(status_code=429, detail=reason)
+
+    @app.post("/threads", status_code=201, tags=["threads"], dependencies=[Depends(admit_run)])
     async def create_thread(request: Request, body: NewMessage) -> RunAccepted:
         """Start a conversation with its first message."""
         svc = services(request)
@@ -292,7 +337,12 @@ def create_app(
     async def get_thread(request: Request, thread_id: str) -> ThreadDetail:
         return await services(request).threads.get(thread_id)
 
-    @app.post("/threads/{thread_id}/messages", status_code=202, tags=["threads"])
+    @app.post(
+        "/threads/{thread_id}/messages",
+        status_code=202,
+        tags=["threads"],
+        dependencies=[Depends(admit_run)],
+    )
     async def send_message(request: Request, thread_id: str, body: NewMessage) -> RunAccepted:
         """Add a turn. Returns 409 while the thread's previous run is still going."""
         run = await services(request).threads.start_turn(thread_id, build_request(thread_id, body))
@@ -424,7 +474,7 @@ def create_app(
         await svc.audit.record(actor="user", action="job.confirmed", subject=job_id)
         return updated
 
-    @app.post("/jobs/{job_id}/run", tags=["jobs"])
+    @app.post("/jobs/{job_id}/run", tags=["jobs"], dependencies=[Depends(admit_run)])
     async def run_job_now(request: Request, job_id: str) -> Job:
         """Fire an active job at the next scheduler tick instead of waiting."""
         job = await job_or_404(request, job_id)
@@ -512,6 +562,45 @@ def create_app(
             actor="user", action="memory.deleted", subject=memory_id
         )
 
+    @app.get("/evals/review", tags=["evals"])
+    async def review_queue(
+        request: Request, limit: Annotated[int, Query(ge=1, le=50)] = 10
+    ) -> list[ReviewItem]:
+        """Judge verdicts awaiting the owner's label (judge calibration)."""
+        items = await services(request).evals.review_queue(limit=limit)
+        return [
+            item.model_copy(
+                update={"criterion": JUDGE_QUESTIONS.get(item.metric_id, item.metric_id)}
+            )
+            for item in items
+        ]
+
+    @app.post("/evals/review", status_code=204, tags=["evals"])
+    async def label_verdict(request: Request, body: ReviewLabel) -> None:
+        if not await services(request).evals.label(body):
+            raise HTTPException(status_code=404, detail="no such judge verdict")
+
+    @app.get("/evals/calibration", tags=["evals"])
+    async def judge_calibration(request: Request) -> list[CriterionCalibration]:
+        """Judge-human agreement per criterion. A criterion is trusted only with enough
+        labels and a kappa of at least MIN_KAPPA."""
+        report: list[CriterionCalibration] = []
+        for metric_id, pairs in sorted((await services(request).evals.label_pairs()).items()):
+            judge, human = [j for j, _ in pairs], [h for _, h in pairs]
+            agreement = sum(j == h for j, h in pairs) / len(pairs)
+            informative = len(set(judge) | set(human)) > 1
+            kappa = cohens_kappa(judge, human) if informative else None
+            report.append(
+                CriterionCalibration(
+                    metric_id=metric_id,
+                    n=len(pairs),
+                    agreement=round(agreement, 3),
+                    kappa=round(kappa, 3) if kappa is not None else None,
+                    trusted=len(pairs) >= MIN_LABELS and kappa is not None and kappa >= MIN_KAPPA,
+                )
+            )
+        return report
+
     @app.get("/evals/runs", tags=["evals"])
     async def list_eval_runs(
         request: Request,
@@ -536,6 +625,8 @@ def create_app(
             push_configured=settings.push_configured,
             vapid_public_key=settings.vapid_public_key,
             timezone=settings.timezone,
+            spent_today_usd=round(await services(request).spend.ledger.spent_today(clock.now()), 4),
+            daily_spend_cap_usd=settings.daily_spend_cap_usd,
         )
 
     @app.get("/settings", tags=["settings"])
@@ -565,7 +656,12 @@ def create_app(
     async def list_notifications(request: Request) -> list[StoredNotification]:
         return await services(request).notifications.recent()
 
-    @app.post("/notifications/test", status_code=202, tags=["notifications"])
+    @app.post(
+        "/notifications/test",
+        status_code=202,
+        tags=["notifications"],
+        dependencies=[Depends(rate_limited)],
+    )
     async def send_test_notification(request: Request, body: TestNotification) -> Queued:
         """Queue a test message on the chosen channels (console and push by default)."""
         await services(request).notifications.enqueue(

@@ -20,7 +20,7 @@ from contextlib import AsyncExitStack
 from datetime import UTC, datetime
 from importlib.metadata import version
 from pathlib import Path
-from typing import Any
+from typing import Any, ClassVar
 
 import httpx2
 from opentelemetry.sdk.trace.export import SimpleSpanProcessor
@@ -31,9 +31,17 @@ from kairos_domain.events import RunFinished
 from kairos_domain.governance import Notification
 from kairos_domain.jobs import Job, JobSpec, JobStatus
 from kairos_domain.memory import Memory, MemoryKind, MemorySource, MemoryStatus
-from kairos_domain.run import RunRequest
+from kairos_domain.run import RunRequest, ToolCallRecord
+from kairos_domain.tools import ToolContext, ToolOutput, ToolSpec
 from kairos_evals import Example, OtlpJsonTraceSource, Trace, TraceFilter
-from kairos_harness import AgentLoop, FakeClock, HookChain, InMemoryCheckpointer, SeededIdGenerator
+from kairos_harness import (
+    AgentLoop,
+    FakeClock,
+    HookChain,
+    InMemoryCheckpointer,
+    SeededIdGenerator,
+    ToolExecutor,
+)
 from kairos_harness.cassette import (
     RecordingProvider,
     RecordingToolExecutor,
@@ -42,6 +50,7 @@ from kairos_harness.cassette import (
 )
 from kairos_memory.testing import MemoryMemories
 from kairos_policy import PolicyHooks
+from kairos_policy.screening import InjectionScreen
 from kairos_scheduler.testing import MemoryJobs
 from kairos_telemetry import OtlpJsonFileExporter, TracingHooks, configure_tracing
 
@@ -135,6 +144,42 @@ def seeded_jobs() -> MemoryJobs:
     return store
 
 
+class FaultInjector:
+    """Makes chosen tools fail, for failure-recovery cases (``metadata.faults``).
+
+    Each fault is ``{"tool": name, "mode": "error" | "timeout" | "malformed",
+    "times": n}``; ``times`` defaults to every call. The recorded tool cassette keeps
+    the failures, so replays fail the same way.
+    """
+
+    MESSAGES: ClassVar[dict[str, str]] = {
+        "error": "{tool} failed: HTTP 503 Service Unavailable",
+        "timeout": "{tool} failed: ReadTimeout after 20s",
+        "malformed": "\x00\x1f\ufffd\ufffd PK\x03\x04 [binary data, 4.2 MB, unreadable]",
+    }
+
+    def __init__(self, inner: ToolExecutor, faults: list[dict[str, Any]]) -> None:
+        self._inner = inner
+        self._left = {str(f["tool"]): int(f.get("times", 10**6)) for f in faults}
+        self._mode = {str(f["tool"]): str(f.get("mode", "error")) for f in faults}
+
+    def specs(self) -> Sequence[ToolSpec]:
+        return self._inner.specs()
+
+    async def execute(self, call: ToolCallRecord, context: ToolContext) -> ToolOutput:
+        if self._left.get(call.name, 0) > 0:
+            self._left[call.name] -= 1
+            mode = self._mode[call.name]
+            message = self.MESSAGES[mode].format(tool=call.name)
+            return ToolOutput(content=message, is_error=mode != "malformed")
+        return await self._inner.execute(call, context)
+
+
+def faults(example: Example) -> list[dict[str, Any]]:
+    raw = example.metadata.get("faults")
+    return [dict(f) for f in raw if isinstance(f, dict)] if isinstance(raw, list) else []
+
+
 class FixtureTransport(httpx2.AsyncBaseTransport):
     """Serves planted pages (for injection cases) and passes everything else on."""
 
@@ -145,8 +190,9 @@ class FixtureTransport(httpx2.AsyncBaseTransport):
     async def handle_async_request(self, request: httpx2.Request) -> httpx2.Response:
         page = self._pages.get(str(request.url))
         if page is not None:
+            kind = "application/json" if request.url.path.endswith(".json") else "text/html"
             return httpx2.Response(
-                200, headers={"content-type": "text/html; charset=utf-8"}, text=page
+                200, headers={"content-type": f"{kind}; charset=utf-8"}, text=page
             )
         return await self._inner.handle_async_request(request)
 
@@ -216,13 +262,15 @@ class KairosAdapter:
                 example, request, model_path, tool_path, clock, hooks, checkpointer
             )
         else:
+            provider = ReplayProvider(model_path, name="anthropic")
             loop = AgentLoop(
-                provider=ReplayProvider(model_path, name="anthropic"),
+                provider=provider,
                 tools=ReplayToolExecutor(tool_path),
                 checkpointer=checkpointer,
                 clock=clock,
                 ids=SeededIdGenerator(run_id),
                 hooks=hooks,
+                screen=InjectionScreen(provider),
             )
             finished = await _finish(loop, request)
         self.cost_usd += finished.cost_usd
@@ -276,13 +324,20 @@ class KairosAdapter:
                 toolset = await stack.enter_async_context(McpToolset(config))
                 for item in toolset.tools:
                     tools.register(item)
+            recorder = RecordingProvider(anthropic_provider(), model_path)
+            executor: ToolExecutor = (
+                FaultInjector(tools, faults(example)) if faults(example) else tools
+            )
             loop = AgentLoop(
-                provider=RecordingProvider(anthropic_provider(), model_path),
-                tools=RecordingToolExecutor(tools, tool_path),
+                provider=recorder,
+                tools=RecordingToolExecutor(executor, tool_path),
                 checkpointer=checkpointer,
                 clock=clock,
                 ids=SeededIdGenerator(request.run_id),
                 hooks=hooks,
+                # The classifier's calls are recorded in the same cassette, so replays
+                # screen exactly as the recording did.
+                screen=InjectionScreen(recorder),
             )
             return await _finish(loop, request)
 

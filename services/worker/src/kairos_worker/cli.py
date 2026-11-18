@@ -14,6 +14,7 @@ import signal
 import sys
 import uuid
 from contextlib import suppress
+from datetime import datetime
 from pathlib import Path
 from typing import Annotated
 
@@ -23,11 +24,15 @@ from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import ec
 
 from kairos_db import RunQueue, create_engine
+from kairos_db.governance import NotificationStore
 from kairos_db.migrate import upgrade
 from kairos_domain.events import RunEvent
+from kairos_domain.governance import Notification, NotificationKind
 from kairos_domain.run import RunRequest
+from kairos_evals import EvalRun
 from kairos_harness import InMemoryCheckpointer, Provider
 from kairos_harness.cassette import RecordingProvider, ReplayProvider
+from kairos_worker.backup import backup, restore
 from kairos_worker.service import open_runtime, work
 from kairos_worker.settings import Settings
 from kairos_worker.wiring import build_provider
@@ -126,6 +131,71 @@ def worker() -> None:
             await engine.dispose()
 
     asyncio.run(main())
+
+
+@app.command(name="backup")
+def backup_now() -> None:
+    """Dump the database to the backup directory now (and prune old dumps)."""
+    settings = Settings()
+    path = asyncio.run(
+        backup(
+            settings.backup_dir,
+            now=datetime.now().astimezone(),
+            keep_days=settings.backup_keep_days,
+        )
+    )
+    typer.echo(f"wrote {path}")
+
+
+@app.command(name="restore")
+def restore_dump(
+    dump: Annotated[Path, typer.Argument(help="A .dump file written by `kairos backup`.")],
+    yes: Annotated[bool, typer.Option("--yes", help="Skip the confirmation.")] = False,
+) -> None:
+    """Restore a dump over the current database. Stop the API and worker first."""
+    if not yes:
+        typer.confirm(f"Replace the current database with {dump.name}?", abort=True)
+    asyncio.run(restore(dump))
+    typer.echo(f"restored {dump.name}")
+
+
+@app.command(name="evals-alert")
+def evals_alert(
+    runs: Annotated[Path, typer.Argument(help="runs.jsonl written by kairos-evals (jsonl:DIR).")],
+) -> None:
+    """Notify the owner about each suite whose latest gated eval run failed (once per run)."""
+    latest: dict[str, EvalRun] = {}
+    for line in runs.read_text().splitlines():
+        if line.strip():
+            run = EvalRun.model_validate_json(line)
+            if run.passed is not None:
+                latest[run.suite] = run
+    failed = [run for run in latest.values() if run.passed is False]
+    if not failed:
+        typer.echo("no gate failures")
+        return
+
+    async def send() -> None:
+        engine = create_engine(Settings().database_url)
+        try:
+            store = NotificationStore(engine)
+            for run in failed:
+                failures = run.gate.get("failures")
+                lines = [str(f) for f in failures] if isinstance(failures, list) else []
+                await store.enqueue(
+                    Notification(
+                        kind=NotificationKind.ALERT,
+                        title=f"Eval regression in {run.suite}",
+                        body="\n".join(lines) or "The regression gate failed.",
+                        url=f"/evals/{run.id}",
+                    ),
+                    dedupe_key=f"eval-gate:{run.id}",
+                )
+        finally:
+            await engine.dispose()
+
+    asyncio.run(send())
+    typer.echo(f"alerted for {', '.join(run.suite for run in failed)}")
 
 
 @app.command(name="vapid-keys")

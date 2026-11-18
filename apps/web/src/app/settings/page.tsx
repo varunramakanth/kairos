@@ -9,6 +9,7 @@ import {
   setKillSwitch,
 } from "@/client/sdk.gen";
 import type { AppSettings, StoredNotification } from "@/client/types.gen";
+import { SpendSection } from "@/components/spend-section";
 import { Button } from "@/components/ui/button";
 import { errorMessage } from "@/lib/api";
 import { formatWhen } from "@/lib/jobs";
@@ -110,6 +111,11 @@ export default function SettingsPage() {
           </p>
         )}
       </section>
+
+      <SpendSection
+        spent={settings.spent_today_usd}
+        cap={settings.daily_spend_cap_usd ?? null}
+      />
 
       <section className="space-y-2 rounded-lg border p-4">
         <h2 className="flex items-center gap-2 font-medium">

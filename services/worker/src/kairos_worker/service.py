@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine
 from kairos_db import EventPublisher, JobStore, Lease, RunQueue
 from kairos_db.governance import ApprovalStore, AuditStore, NotificationStore, SettingsStore
 from kairos_db.memories import MemoryStore
+from kairos_db.spend import SpendLedger
 from kairos_domain.governance import ApprovalStatus
 from kairos_domain.jobs import JobStatus
 from kairos_harness import Clock, HookChain, Hooks, Provider, RunContext, SystemClock
@@ -30,11 +31,14 @@ from kairos_scheduler.timing import next_fire
 from kairos_telemetry import TracingHooks, configure_tracing
 from kairos_tools.mcp import open_toolsets
 from kairos_worker.audit import AuditHooks
+from kairos_worker.backup import nightly
 from kairos_worker.settings import Settings
+from kairos_worker.spend import SpendCap, SpendCapHooks
 from kairos_worker.wiring import (
     Runtime,
     add_delegate,
     build_provider,
+    build_screen,
     build_tools,
     http_client,
     mcp_configs,
@@ -104,6 +108,11 @@ async def open_runtime(
                 [PolicyHooks()]
                 if engine is None
                 else [
+                    SpendCapHooks(
+                        spend_cap(settings, engine, clock or SystemClock()),
+                        NotificationStore(engine),
+                        clock=clock or SystemClock(),
+                    ),
                     PolicyHooks(actions_enabled=SettingsStore(engine).actions_enabled),
                     AuditHooks(AuditStore(engine), tools.specs()),
                 ]
@@ -112,8 +121,9 @@ async def open_runtime(
                 hooks.append(ReflectionHooks(provider, memories, model=settings.job_model))
             # Policy first (its decision wins), tracing last (it sees the final state).
             chain = HookChain([*hooks, tracing_hooks])
-            add_delegate(tools, settings, provider, hooks=chain, clock=clock)
-            yield Runtime(settings, provider, tools, chain)
+            screen = build_screen(settings, provider)
+            add_delegate(tools, settings, provider, hooks=chain, clock=clock, screen=screen)
+            yield Runtime(settings, provider, tools, chain, screen)
         finally:
             tracer_provider.shutdown()
 
@@ -227,7 +237,22 @@ async def work(
             )
             group.create_task(dispatcher.run_forever(stop))
             group.create_task(backfill_memories(memory_store(settings, engine)))
+            if settings.backups:
+                group.create_task(
+                    nightly(
+                        settings.backup_dir,
+                        stop,
+                        now=clock.now,
+                        timezone=settings.timezone,
+                        keep_days=settings.backup_keep_days,
+                    )
+                )
         log.info("worker_stopped")
+
+
+def spend_cap(settings: Settings, engine: AsyncEngine, clock: Clock) -> SpendCap:
+    ledger = SpendLedger(engine, timezone=settings.timezone)
+    return SpendCap(ledger, cap_usd=settings.daily_spend_cap_usd, clock=clock)
 
 
 async def backfill_memories(store: MemoryStore) -> None:

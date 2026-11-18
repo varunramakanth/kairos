@@ -59,3 +59,40 @@ class EvalResultRow(DomainModel):
 class EvalRunDetail(DomainModel):
     run: EvalRunSummary
     results: list[EvalResultRow]
+
+
+class ReviewItem(DomainModel):
+    """One judge verdict for a human to label. The judge's own verdict is included so
+    the UI can reveal it after the human has answered."""
+
+    run_id: str
+    suite: str
+    example_id: str
+    metric_id: str
+    question: str
+    answer: str
+    criterion: str
+    """What the judge was asked about this answer."""
+    judge_passed: bool
+    judge_score: int | None
+    judge_reason: str
+
+
+class ReviewLabel(DomainModel):
+    run_id: str
+    example_id: str
+    metric_id: str
+    passed: bool
+    note: str | None = None
+
+
+class CriterionCalibration(DomainModel):
+    """How well the judge agrees with the owner on one criterion."""
+
+    metric_id: str
+    n: int
+    agreement: float
+    kappa: float | None
+    """Cohen's kappa; ``None`` until there are labels on both outcomes."""
+    trusted: bool
+    """At least ``MIN_LABELS`` labels and kappa of at least ``MIN_KAPPA``."""

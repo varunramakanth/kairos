@@ -15,6 +15,7 @@ from kairos_harness import (
     AgentLoop,
     Checkpointer,
     Clock,
+    ContentScreen,
     Hooks,
     LoopConfig,
     Provider,
@@ -27,6 +28,7 @@ from kairos_memory.embeddings import Embedder, LocalEmbedder
 from kairos_memory.protocols import MemoryRepository
 from kairos_memory.tools import memory_tools
 from kairos_notify.tools import Enqueue, notify_tool
+from kairos_policy.screening import InjectionScreen
 from kairos_providers import anthropic_provider, bedrock_provider
 from kairos_scheduler.protocols import JobRepository
 from kairos_scheduler.tools import record_observation_tool, schedule_tools
@@ -161,6 +163,14 @@ SUBAGENT_PROFILES = (
 )
 
 
+def build_screen(settings: Settings, provider: Provider) -> ContentScreen | None:
+    """Injection screening for untrusted tool output (ADR-015)."""
+    if settings.injection_screening == "off":
+        return None
+    classifier = provider if settings.injection_screening == "model" else None
+    return InjectionScreen(classifier, model=settings.job_model)
+
+
 def add_delegate(
     tools: ToolRegistry,
     settings: Settings,
@@ -168,6 +178,7 @@ def add_delegate(
     *,
     hooks: Hooks | None = None,
     clock: Clock | None = None,
+    screen: ContentScreen | None = None,
 ) -> Subagents:
     """Register ``delegate`` last: children use the tools registered so far (read-only
     ones only), and the tool order stays stable for the prompt cache."""
@@ -178,6 +189,7 @@ def add_delegate(
         model=settings.subagent_model,
         hooks=hooks,
         clock=clock,
+        screen=screen,
     )
     tools.register(delegate_tool(subagents))
     return subagents
@@ -191,6 +203,7 @@ class Runtime:
     provider: Provider
     tools: ToolExecutor
     hooks: Hooks | None = None
+    screen: ContentScreen | None = None
 
     def loop(self, checkpointer: Checkpointer) -> AgentLoop:
         config = LoopConfig(compact_at_prompt_tokens=self.settings.compact_at_prompt_tokens)
@@ -200,6 +213,7 @@ class Runtime:
             checkpointer=checkpointer,
             hooks=self.hooks,
             config=config,
+            screen=self.screen,
         )
 
     def durable_loop(self, engine: AsyncEngine, lease: Lease) -> AgentLoop:

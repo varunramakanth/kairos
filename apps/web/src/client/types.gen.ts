@@ -78,6 +78,14 @@ export type AppSettings = {
      * Timezone
      */
     timezone: string;
+    /**
+     * Spent Today Usd
+     */
+    spent_today_usd: number;
+    /**
+     * Daily Spend Cap Usd
+     */
+    daily_spend_cap_usd: number | null;
 };
 
 /**
@@ -423,6 +431,34 @@ export type ContextCompacted = {
      * Cost Usd
      */
     cost_usd: number;
+};
+
+/**
+ * CriterionCalibration
+ *
+ * How well the judge agrees with the owner on one criterion.
+ */
+export type CriterionCalibration = {
+    /**
+     * Metric Id
+     */
+    metric_id: string;
+    /**
+     * N
+     */
+    n: number;
+    /**
+     * Agreement
+     */
+    agreement: number;
+    /**
+     * Kappa
+     */
+    kappa: number | null;
+    /**
+     * Trusted
+     */
+    trusted: boolean;
 };
 
 /**
@@ -1166,6 +1202,81 @@ export type Queued = {
 };
 
 /**
+ * ReviewItem
+ *
+ * One judge verdict for a human to label. The judge's own verdict is included so
+ * the UI can reveal it after the human has answered.
+ */
+export type ReviewItem = {
+    /**
+     * Run Id
+     */
+    run_id: string;
+    /**
+     * Suite
+     */
+    suite: string;
+    /**
+     * Example Id
+     */
+    example_id: string;
+    /**
+     * Metric Id
+     */
+    metric_id: string;
+    /**
+     * Question
+     */
+    question: string;
+    /**
+     * Answer
+     */
+    answer: string;
+    /**
+     * Criterion
+     */
+    criterion: string;
+    /**
+     * Judge Passed
+     */
+    judge_passed: boolean;
+    /**
+     * Judge Score
+     */
+    judge_score: number | null;
+    /**
+     * Judge Reason
+     */
+    judge_reason: string;
+};
+
+/**
+ * ReviewLabel
+ */
+export type ReviewLabel = {
+    /**
+     * Run Id
+     */
+    run_id: string;
+    /**
+     * Example Id
+     */
+    example_id: string;
+    /**
+     * Metric Id
+     */
+    metric_id: string;
+    /**
+     * Passed
+     */
+    passed: boolean;
+    /**
+     * Note
+     */
+    note?: string | null;
+};
+
+/**
  * RunAccepted
  */
 export type RunAccepted = {
@@ -1765,6 +1876,10 @@ export type ToolCallResult = {
      * Duration Ms
      */
     duration_ms: number;
+    /**
+     * Suspected Injection
+     */
+    suspected_injection?: boolean;
 };
 
 /**
@@ -2663,6 +2778,81 @@ export type UpdateMemoryResponses = {
 };
 
 export type UpdateMemoryResponse = UpdateMemoryResponses[keyof UpdateMemoryResponses];
+
+export type ReviewQueueData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Limit
+         */
+        limit?: number;
+    };
+    url: '/evals/review';
+};
+
+export type ReviewQueueErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type ReviewQueueError = ReviewQueueErrors[keyof ReviewQueueErrors];
+
+export type ReviewQueueResponses = {
+    /**
+     * Response Review Queue
+     *
+     * Successful Response
+     */
+    200: Array<ReviewItem>;
+};
+
+export type ReviewQueueResponse = ReviewQueueResponses[keyof ReviewQueueResponses];
+
+export type LabelVerdictData = {
+    body: ReviewLabel;
+    path?: never;
+    query?: never;
+    url: '/evals/review';
+};
+
+export type LabelVerdictErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type LabelVerdictError = LabelVerdictErrors[keyof LabelVerdictErrors];
+
+export type LabelVerdictResponses = {
+    /**
+     * Successful Response
+     */
+    204: void;
+};
+
+export type LabelVerdictResponse = LabelVerdictResponses[keyof LabelVerdictResponses];
+
+export type JudgeCalibrationData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/evals/calibration';
+};
+
+export type JudgeCalibrationResponses = {
+    /**
+     * Response Judge Calibration
+     *
+     * Successful Response
+     */
+    200: Array<CriterionCalibration>;
+};
+
+export type JudgeCalibrationResponse = JudgeCalibrationResponses[keyof JudgeCalibrationResponses];
 
 export type ListEvalRunsData = {
     body?: never;

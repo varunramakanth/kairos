@@ -6,7 +6,7 @@ from typing import Protocol
 from pydantic import BaseModel
 
 from kairos_evals.trace import Trace
-from kairos_evals.types import EvalResult, Example, Kind, Layer, Score
+from kairos_evals.types import EvalResult, EvalRun, Example, Kind, Layer, Score
 
 
 class Metric(Protocol):
@@ -39,6 +39,6 @@ class TraceSource(Protocol):
 
 
 class ResultSink(Protocol):
-    """Where results go: stdout and JSONL today; S3 (Parquet) and Postgres later."""
+    """Where an eval run and its results go: JSONL files, Postgres, S3 (Parquet)."""
 
-    async def write(self, results: Sequence[EvalResult]) -> None: ...
+    async def write(self, run: EvalRun, results: Sequence[EvalResult]) -> None: ...

@@ -1,12 +1,14 @@
 """The eval framework on hand-written OTLP/JSON, with no Kairos code involved."""
 
 import json
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
 import pytest
 
 from kairos_evals import (
+    EvalRun,
     Evaluator,
     Example,
     JsonlSink,
@@ -15,6 +17,7 @@ from kairos_evals import (
     TraceFilter,
     load_examples,
     summarize,
+    summarize_results,
     traces_from_otlp,
 )
 from kairos_evals.metrics import BudgetAdherence, CitationGrounding, ToolSelectionAccuracy
@@ -159,11 +162,23 @@ async def test_evaluator_scores_every_case_and_results_round_trip(
     assert {r.layer for r in results} == {"component", "outcome"}
     assert summarize(results) == {"budget_adherence": 0.5, "tool_selection_accuracy": 0.75}
 
-    sink_path = tmp_path / "results" / "run.jsonl"
-    await JsonlSink(sink_path).write(results)
-    assert [json.loads(line)["metric_id"] for line in sink_path.read_text().splitlines()] == [
-        r.metric_id for r in results
-    ]
+    run = EvalRun(
+        id="evr_1",
+        suite="unit",
+        harness="hand-written",
+        harness_version="0",
+        model="none",
+        started_at=datetime(2026, 11, 18, tzinfo=UTC),
+        finished_at=datetime(2026, 11, 18, tzinfo=UTC),
+        examples=2,
+        summary=summarize_results(results),
+    )
+    await JsonlSink(tmp_path / "results").write(run, results)
+    lines = (tmp_path / "results" / "results.jsonl").read_text().splitlines()
+    assert [json.loads(line)["metric_id"] for line in lines] == [r.metric_id for r in results]
+    assert {json.loads(line)["run_id"] for line in lines} == {"evr_1"}
+    (stored,) = (tmp_path / "results" / "runs.jsonl").read_text().splitlines()
+    assert EvalRun.model_validate_json(stored) == run
 
     with pytest.raises(ValueError, match="unique"):
         Evaluator([ToolSelectionAccuracy(), ToolSelectionAccuracy()])

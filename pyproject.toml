@@ -15,6 +15,7 @@ members = ["packages/*", "services/*"]
 dev = [
     "asyncpg-stubs>=0.32,<0.33",
     "httpx2>=2.0",
+    "moto[s3]>=5.1",
     "pyright>=1.1.400",
     "pytest>=8.3",
     "pytest-asyncio>=1.0",
@@ -22,7 +23,7 @@ dev = [
     "ruff>=0.12",
     "testcontainers[postgres]>=4.10",
     "time-machine>=2.16",
-    "types-boto3[sesv2]>=1.44",
+    "types-boto3[s3,sesv2]>=1.44",
     "types-croniter>=6.2.4.20261006",
 ]
 

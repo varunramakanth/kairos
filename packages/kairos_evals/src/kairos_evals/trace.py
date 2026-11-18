@@ -5,12 +5,20 @@ semantic conventions, nothing Kairos-specific. Any agent that emits such spans c
 be evaluated.
 """
 
+import json
 from collections.abc import Sequence
 from datetime import UTC, datetime
 
 from pydantic import BaseModel, ConfigDict, JsonValue
 
 OPERATION = "gen_ai.operation.name"
+INPUT_ATTRIBUTE = "input.value"
+OUTPUT_ATTRIBUTE = "output.value"
+STOP_REASON = "kairos.stop_reason"
+COST_USD = "kairos.cost_usd"
+REQUESTED_TOOL_CALLS = "kairos.requested_tool_calls"
+"""JSON list of ``{id, name, arguments}`` on a model-call span. Agents that do not emit
+it are still evaluated; tool metrics then see executed calls only."""
 
 
 class Span(BaseModel):
@@ -72,6 +80,81 @@ class Trace(BaseModel):
         """Names of executed tools, in the order they started."""
         names = [span.attributes.get("gen_ai.tool.name") for span in self.tool_calls]
         return [name for name in names if isinstance(name, str)]
+
+    @property
+    def requested_tool_calls(self) -> list["ToolRequest"]:
+        """Every tool call the model asked for, in order, including calls a policy then
+        held for approval or denied. Needs content capture; falls back to the
+        executed calls (without arguments) when the trace has none."""
+        requests: list[ToolRequest] = []
+        captured = False
+        for span in self.model_calls:
+            raw = span.attributes.get(REQUESTED_TOOL_CALLS)
+            if not isinstance(raw, str):
+                continue
+            captured = True
+            for item in json.loads(raw):
+                requests.append(ToolRequest.model_validate(item))
+        if captured:
+            return requests
+        return [
+            ToolRequest(id=str(span.attributes.get("gen_ai.tool.call.id", "")), name=name)
+            for span in self.tool_calls
+            if isinstance(name := span.attributes.get("gen_ai.tool.name"), str)
+        ]
+
+    @property
+    def requested_tool_names(self) -> list[str]:
+        return [request.name for request in self.requested_tool_calls]
+
+    def _root_text(self, key: str) -> str | None:
+        root = self.root
+        value = root.attributes.get(key) if root else None
+        return value if isinstance(value, str) else None
+
+    @property
+    def input_text(self) -> str | None:
+        return self._root_text(INPUT_ATTRIBUTE)
+
+    @property
+    def answer(self) -> str | None:
+        """The final answer text (content capture only)."""
+        return self._root_text(OUTPUT_ATTRIBUTE)
+
+    @property
+    def stop_reason(self) -> str | None:
+        return self._root_text(STOP_REASON)
+
+    @property
+    def cost_usd(self) -> float:
+        root = self.root
+        if root is not None and COST_USD in root.attributes:
+            return root.number(COST_USD)
+        return sum(span.number("gen_ai.usage.cost") for span in self.model_calls)
+
+    @property
+    def duration_seconds(self) -> float:
+        if not self.spans:
+            return 0.0
+        return (max(s.end for s in self.spans) - min(s.start for s in self.spans)).total_seconds()
+
+    def tool_outputs(self) -> list[str]:
+        """Text the tools returned (content capture only)."""
+        return [
+            value
+            for span in self.tool_calls
+            if isinstance(value := span.attributes.get(OUTPUT_ATTRIBUTE), str)
+        ]
+
+
+class ToolRequest(BaseModel):
+    """A tool call as the model asked for it."""
+
+    model_config = ConfigDict(frozen=True)
+
+    id: str
+    name: str
+    arguments: dict[str, JsonValue] = {}
 
 
 def from_unix_nano(value: str | int) -> datetime:

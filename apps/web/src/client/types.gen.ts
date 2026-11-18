@@ -461,6 +461,155 @@ export type Decision = {
     note?: string | null;
 };
 
+export type EvalKind = 'deterministic' | 'llm_judge' | 'human';
+
+export type EvalLayer = 'outcome' | 'component' | 'model';
+
+/**
+ * EvalMetricSummary
+ */
+export type EvalMetricSummary = {
+    /**
+     * Metric Id
+     */
+    metric_id: string;
+    layer: EvalLayer;
+    kind: EvalKind;
+    /**
+     * N
+     */
+    n: number;
+    /**
+     * Mean
+     */
+    mean: number;
+    /**
+     * Pass Rate
+     */
+    pass_rate: number;
+    /**
+     * P50
+     */
+    p50?: number | null;
+    /**
+     * P95
+     */
+    p95?: number | null;
+};
+
+/**
+ * EvalResultRow
+ */
+export type EvalResultRow = {
+    /**
+     * Example Id
+     */
+    example_id: string | null;
+    /**
+     * Trace Id
+     */
+    trace_id: string;
+    /**
+     * Metric Id
+     */
+    metric_id: string;
+    layer: EvalLayer;
+    kind: EvalKind;
+    /**
+     * Value
+     */
+    value: number;
+    /**
+     * Passed
+     */
+    passed: boolean;
+    /**
+     * Applicable
+     */
+    applicable: boolean;
+    /**
+     * Measurement
+     */
+    measurement: number | null;
+    /**
+     * Reason
+     */
+    reason: string;
+    /**
+     * Details
+     */
+    details: {
+        [key: string]: JsonValue;
+    };
+};
+
+/**
+ * EvalRunDetail
+ */
+export type EvalRunDetail = {
+    run: EvalRunSummary;
+    /**
+     * Results
+     */
+    results: Array<EvalResultRow>;
+};
+
+/**
+ * EvalRunSummary
+ */
+export type EvalRunSummary = {
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * Suite
+     */
+    suite: string;
+    /**
+     * Harness
+     */
+    harness: string;
+    /**
+     * Harness Version
+     */
+    harness_version: string;
+    /**
+     * Model
+     */
+    model: string;
+    /**
+     * Git Sha
+     */
+    git_sha: string | null;
+    /**
+     * Started At
+     */
+    started_at: string;
+    /**
+     * Finished At
+     */
+    finished_at: string;
+    /**
+     * Examples
+     */
+    examples: number;
+    /**
+     * Passed
+     */
+    passed: boolean | null;
+    /**
+     * Summary
+     */
+    summary: Array<EvalMetricSummary>;
+    /**
+     * Gate
+     */
+    gate: {
+        [key: string]: JsonValue;
+    };
+};
+
 /**
  * HTTPValidationError
  */
@@ -2318,6 +2467,72 @@ export type ListAuditResponses = {
 };
 
 export type ListAuditResponse = ListAuditResponses[keyof ListAuditResponses];
+
+export type ListEvalRunsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Suite
+         */
+        suite?: string | null;
+        /**
+         * Limit
+         */
+        limit?: number;
+    };
+    url: '/evals/runs';
+};
+
+export type ListEvalRunsErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type ListEvalRunsError = ListEvalRunsErrors[keyof ListEvalRunsErrors];
+
+export type ListEvalRunsResponses = {
+    /**
+     * Response List Eval Runs
+     *
+     * Successful Response
+     */
+    200: Array<EvalRunSummary>;
+};
+
+export type ListEvalRunsResponse = ListEvalRunsResponses[keyof ListEvalRunsResponses];
+
+export type GetEvalRunData = {
+    body?: never;
+    path: {
+        /**
+         * Eval Run Id
+         */
+        eval_run_id: string;
+    };
+    query?: never;
+    url: '/evals/runs/{eval_run_id}';
+};
+
+export type GetEvalRunErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type GetEvalRunError = GetEvalRunErrors[keyof GetEvalRunErrors];
+
+export type GetEvalRunResponses = {
+    /**
+     * Successful Response
+     */
+    200: EvalRunDetail;
+};
+
+export type GetEvalRunResponse = GetEvalRunResponses[keyof GetEvalRunResponses];
 
 export type GetSettingsData = {
     body?: never;

@@ -35,6 +35,7 @@ from kairos_db import (
     ThreadRepository,
     create_engine,
 )
+from kairos_db.evals import EvalStore
 from kairos_db.governance import (
     AlreadyDecidedError,
     ApprovalStore,
@@ -44,6 +45,7 @@ from kairos_db.governance import (
 )
 from kairos_domain.base import DomainModel
 from kairos_domain.content import Message
+from kairos_domain.evals import EvalRunDetail, EvalRunSummary
 from kairos_domain.events import RunEvent
 from kairos_domain.governance import (
     Approval,
@@ -147,6 +149,7 @@ class Services:
     audit: AuditStore
     app_settings: SettingsStore
     notifications: NotificationStore
+    evals: EvalStore
 
 
 def _operation_id(route: APIRoute) -> str:
@@ -198,6 +201,7 @@ def create_app(
             audit=AuditStore(engine),
             app_settings=SettingsStore(engine),
             notifications=NotificationStore(engine),
+            evals=EvalStore(engine),
         )
         stop = asyncio.Event()
         async with AsyncExitStack() as stack:
@@ -454,6 +458,22 @@ def create_app(
         request: Request, before: int | None = None, limit: Annotated[int, Query(le=500)] = 200
     ) -> list[AuditEntry]:
         return await services(request).audit.recent(limit=limit, before_id=before)
+
+    @app.get("/evals/runs", tags=["evals"])
+    async def list_eval_runs(
+        request: Request,
+        suite: str | None = None,
+        limit: Annotated[int, Query(ge=1, le=500)] = 100,
+    ) -> list[EvalRunSummary]:
+        """Eval runs written by ``kairos-evals run --out postgres:...``, newest first."""
+        return await services(request).evals.runs(suite=suite, limit=limit)
+
+    @app.get("/evals/runs/{eval_run_id}", tags=["evals"])
+    async def get_eval_run(request: Request, eval_run_id: str) -> EvalRunDetail:
+        detail = await services(request).evals.detail(eval_run_id)
+        if detail is None:
+            raise HTTPException(status_code=404, detail=f"eval run {eval_run_id} not found")
+        return detail
 
     async def current_settings(request: Request) -> AppSettings:
         return AppSettings(

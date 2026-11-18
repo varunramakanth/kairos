@@ -42,7 +42,7 @@ async def engine(database_url: str) -> AsyncIterator[AsyncEngine]:
         await connection.execute(
             text(
                 "TRUNCATE threads, runs, jobs, notifications, audit_log, "
-                "push_subscriptions, app_settings CASCADE"
+                "push_subscriptions, app_settings, eval_runs CASCADE"
             )
         )
     yield engine

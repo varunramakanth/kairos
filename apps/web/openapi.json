@@ -890,6 +890,114 @@
         }
       }
     },
+    "/evals/runs": {
+      "get": {
+        "tags": [
+          "evals"
+        ],
+        "summary": "List Eval Runs",
+        "description": "Eval runs written by ``kairos-evals run --out postgres:...``, newest first.",
+        "operationId": "list_eval_runs",
+        "parameters": [
+          {
+            "name": "suite",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Suite"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 500,
+              "minimum": 1,
+              "default": 100,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/EvalRunSummary"
+                  },
+                  "title": "Response List Eval Runs"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/evals/runs/{eval_run_id}": {
+      "get": {
+        "tags": [
+          "evals"
+        ],
+        "summary": "Get Eval Run",
+        "operationId": "get_eval_run",
+        "parameters": [
+          {
+            "name": "eval_run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Eval Run Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EvalRunDetail"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/settings": {
       "get": {
         "tags": [
@@ -1795,6 +1903,272 @@
           "approve"
         ],
         "title": "Decision"
+      },
+      "EvalKind": {
+        "type": "string",
+        "enum": [
+          "deterministic",
+          "llm_judge",
+          "human"
+        ]
+      },
+      "EvalLayer": {
+        "type": "string",
+        "enum": [
+          "outcome",
+          "component",
+          "model"
+        ]
+      },
+      "EvalMetricSummary": {
+        "properties": {
+          "metric_id": {
+            "type": "string",
+            "title": "Metric Id"
+          },
+          "layer": {
+            "$ref": "#/components/schemas/EvalLayer"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/EvalKind"
+          },
+          "n": {
+            "type": "integer",
+            "title": "N"
+          },
+          "mean": {
+            "type": "number",
+            "title": "Mean"
+          },
+          "pass_rate": {
+            "type": "number",
+            "title": "Pass Rate"
+          },
+          "p50": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "P50"
+          },
+          "p95": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "P95"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "metric_id",
+          "layer",
+          "kind",
+          "n",
+          "mean",
+          "pass_rate"
+        ],
+        "title": "EvalMetricSummary"
+      },
+      "EvalResultRow": {
+        "properties": {
+          "example_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Example Id"
+          },
+          "trace_id": {
+            "type": "string",
+            "title": "Trace Id"
+          },
+          "metric_id": {
+            "type": "string",
+            "title": "Metric Id"
+          },
+          "layer": {
+            "$ref": "#/components/schemas/EvalLayer"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/EvalKind"
+          },
+          "value": {
+            "type": "number",
+            "title": "Value"
+          },
+          "passed": {
+            "type": "boolean",
+            "title": "Passed"
+          },
+          "applicable": {
+            "type": "boolean",
+            "title": "Applicable"
+          },
+          "measurement": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Measurement"
+          },
+          "reason": {
+            "type": "string",
+            "title": "Reason"
+          },
+          "details": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/JsonValue"
+            },
+            "type": "object",
+            "title": "Details"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "example_id",
+          "trace_id",
+          "metric_id",
+          "layer",
+          "kind",
+          "value",
+          "passed",
+          "applicable",
+          "measurement",
+          "reason",
+          "details"
+        ],
+        "title": "EvalResultRow"
+      },
+      "EvalRunDetail": {
+        "properties": {
+          "run": {
+            "$ref": "#/components/schemas/EvalRunSummary"
+          },
+          "results": {
+            "items": {
+              "$ref": "#/components/schemas/EvalResultRow"
+            },
+            "type": "array",
+            "title": "Results"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "run",
+          "results"
+        ],
+        "title": "EvalRunDetail"
+      },
+      "EvalRunSummary": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "suite": {
+            "type": "string",
+            "title": "Suite"
+          },
+          "harness": {
+            "type": "string",
+            "title": "Harness"
+          },
+          "harness_version": {
+            "type": "string",
+            "title": "Harness Version"
+          },
+          "model": {
+            "type": "string",
+            "title": "Model"
+          },
+          "git_sha": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Git Sha"
+          },
+          "started_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Started At"
+          },
+          "finished_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Finished At"
+          },
+          "examples": {
+            "type": "integer",
+            "title": "Examples"
+          },
+          "passed": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Passed"
+          },
+          "summary": {
+            "items": {
+              "$ref": "#/components/schemas/EvalMetricSummary"
+            },
+            "type": "array",
+            "title": "Summary"
+          },
+          "gate": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/JsonValue"
+            },
+            "type": "object",
+            "title": "Gate"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "suite",
+          "harness",
+          "harness_version",
+          "model",
+          "git_sha",
+          "started_at",
+          "finished_at",
+          "examples",
+          "passed",
+          "summary",
+          "gate"
+        ],
+        "title": "EvalRunSummary"
       },
       "HTTPValidationError": {
         "properties": {

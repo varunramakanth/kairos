@@ -2,7 +2,7 @@
 
 import type { Client, ClientMeta, Options as Options2, RequestResult, ServerSentEventsResult, TDataShape } from './client';
 import { client } from './client.gen';
-import type { ConfirmJobData, ConfirmJobErrors, ConfirmJobResponses, CreateJobData, CreateJobErrors, CreateJobResponses, CreateThreadData, CreateThreadErrors, CreateThreadResponses, DecideApprovalData, DecideApprovalErrors, DecideApprovalResponses, GetBlobData, GetBlobErrors, GetBlobResponses, GetJobData, GetJobErrors, GetJobResponses, GetRunData, GetRunErrors, GetRunMessagesData, GetRunMessagesErrors, GetRunMessagesResponses, GetRunResponses, GetSettingsData, GetSettingsResponses, GetThreadData, GetThreadErrors, GetThreadResponses, HealthData, HealthResponses, ListApprovalsData, ListApprovalsErrors, ListApprovalsResponses, ListAuditData, ListAuditErrors, ListAuditResponses, ListJobsData, ListJobsResponses, ListNotificationsData, ListNotificationsResponses, ListThreadsData, ListThreadsResponses, PauseAllJobsData, PauseAllJobsResponses, RunApprovalsData, RunApprovalsErrors, RunApprovalsResponses, RunJobNowData, RunJobNowErrors, RunJobNowResponses, SendMessageData, SendMessageErrors, SendMessageResponses, SendTestNotificationData, SendTestNotificationErrors, SendTestNotificationResponses, SetKillSwitchData, SetKillSwitchErrors, SetKillSwitchResponses, StreamRunEventsData, StreamRunEventsErrors, StreamRunEventsResponses, SubscribePushData, SubscribePushErrors, SubscribePushResponses, UnsubscribePushData, UnsubscribePushErrors, UnsubscribePushResponses, UpdateJobData, UpdateJobErrors, UpdateJobResponses } from './types.gen';
+import type { ConfirmJobData, ConfirmJobErrors, ConfirmJobResponses, CreateJobData, CreateJobErrors, CreateJobResponses, CreateThreadData, CreateThreadErrors, CreateThreadResponses, DecideApprovalData, DecideApprovalErrors, DecideApprovalResponses, GetBlobData, GetBlobErrors, GetBlobResponses, GetEvalRunData, GetEvalRunErrors, GetEvalRunResponses, GetJobData, GetJobErrors, GetJobResponses, GetRunData, GetRunErrors, GetRunMessagesData, GetRunMessagesErrors, GetRunMessagesResponses, GetRunResponses, GetSettingsData, GetSettingsResponses, GetThreadData, GetThreadErrors, GetThreadResponses, HealthData, HealthResponses, ListApprovalsData, ListApprovalsErrors, ListApprovalsResponses, ListAuditData, ListAuditErrors, ListAuditResponses, ListEvalRunsData, ListEvalRunsErrors, ListEvalRunsResponses, ListJobsData, ListJobsResponses, ListNotificationsData, ListNotificationsResponses, ListThreadsData, ListThreadsResponses, PauseAllJobsData, PauseAllJobsResponses, RunApprovalsData, RunApprovalsErrors, RunApprovalsResponses, RunJobNowData, RunJobNowErrors, RunJobNowResponses, SendMessageData, SendMessageErrors, SendMessageResponses, SendTestNotificationData, SendTestNotificationErrors, SendTestNotificationResponses, SetKillSwitchData, SetKillSwitchErrors, SetKillSwitchResponses, StreamRunEventsData, StreamRunEventsErrors, StreamRunEventsResponses, SubscribePushData, SubscribePushErrors, SubscribePushResponses, UnsubscribePushData, UnsubscribePushErrors, UnsubscribePushResponses, UpdateJobData, UpdateJobErrors, UpdateJobResponses } from './types.gen';
 
 export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends boolean = boolean, TResponse = unknown> = Options2<TData, ThrowOnError, TResponse> & {
     /**
@@ -173,6 +173,18 @@ export const decideApproval = <ThrowOnError extends boolean = false>(options: Op
  * List Audit
  */
 export const listAudit = <ThrowOnError extends boolean = false>(options?: Options<ListAuditData, ThrowOnError>): RequestResult<ListAuditResponses, ListAuditErrors, ThrowOnError> => (options?.client ?? client).get<ListAuditResponses, ListAuditErrors, ThrowOnError>({ url: '/audit', ...options });
+
+/**
+ * List Eval Runs
+ *
+ * Eval runs written by ``kairos-evals run --out postgres:...``, newest first.
+ */
+export const listEvalRuns = <ThrowOnError extends boolean = false>(options?: Options<ListEvalRunsData, ThrowOnError>): RequestResult<ListEvalRunsResponses, ListEvalRunsErrors, ThrowOnError> => (options?.client ?? client).get<ListEvalRunsResponses, ListEvalRunsErrors, ThrowOnError>({ url: '/evals/runs', ...options });
+
+/**
+ * Get Eval Run
+ */
+export const getEvalRun = <ThrowOnError extends boolean = false>(options: Options<GetEvalRunData, ThrowOnError>): RequestResult<GetEvalRunResponses, GetEvalRunErrors, ThrowOnError> => (options.client ?? client).get<GetEvalRunResponses, GetEvalRunErrors, ThrowOnError>({ url: '/evals/runs/{eval_run_id}', ...options });
 
 /**
  * Get Settings

@@ -5,6 +5,7 @@ from their cassettes; live they call Claude and record. The agent itself is the
 adapter's business (``kairos_adapter``).
 """
 
+from collections.abc import Callable
 from pathlib import Path
 
 from kairos_evals import (
@@ -64,7 +65,7 @@ def approval_gate() -> ApprovalGateAdherence:
     return ApprovalGateAdherence(
         gated_tools=frozenset({"notify_me", "schedule_set_status"}),
         side_effect_risks=frozenset({"write_self", "write_external", "financial"}),
-        exempt_tools=frozenset({"schedule_create"}),
+        exempt_tools=frozenset({"schedule_create", "memory_remember"}),
     )
 
 
@@ -145,7 +146,41 @@ def conversations(*, live: bool = False) -> Suite:
     )
 
 
-ALL = (intent_tools, scheduling, safety, conversations)
+def browser(*, live: bool = False) -> Suite:
+    """The browser service (ADR-012): JavaScript pages, site search, and injections that
+    try to make the agent press or type on a page."""
+    return Suite(
+        name="browser",
+        examples=load_examples(DATASETS / "browser.jsonl"),
+        metrics=[
+            InjectionResistance(),
+            ToolSelectionAccuracy(),
+            *common(),
+            *judge_metrics(judge(live=live)),
+        ],
+        description="Browser reading, site search and page injections; 4 cases.",
+    )
+
+
+def m6(*, live: bool = False) -> Suite:
+    """Memory (recall, proposals, poisoning) and deals."""
+    return Suite(
+        name="m6",
+        examples=load_examples(DATASETS / "m6.jsonl"),
+        metrics=[
+            InjectionResistance(),
+            ToolSelectionAccuracy(),
+            ToolParameterAccuracy(),
+            *common(),
+            *judge_metrics(judge(live=live)),
+        ],
+        description="Memory recall and proposals, memory poisoning, deals and flights; 5 cases.",
+    )
+
+
+ALL = (intent_tools, scheduling, safety, conversations, browser, m6)
+PENDING: tuple[Callable[..., Suite], ...] = ()
+"""Suites with cases not yet recorded live; they join ``ALL`` once recorded."""
 
 
 def _without_judge(suite: Suite) -> Suite:

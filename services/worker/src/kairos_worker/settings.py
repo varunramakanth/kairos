@@ -7,6 +7,7 @@ from pydantic import AliasChoices, Field, SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from kairos_domain.governance import ChannelName
+from kairos_tools.mcp import McpServerConfig
 
 
 class Settings(BaseSettings):
@@ -42,6 +43,29 @@ class Settings(BaseSettings):
         default=None, validation_alias=AliasChoices("TAVILY_API_KEY", "KAIROS_TAVILY_API_KEY")
     )
     """Enables ``web_search``. Without it the tool is not offered to the model."""
+    serpapi_api_key: SecretStr | None = Field(
+        default=None, validation_alias=AliasChoices("SERPAPI_API_KEY", "KAIROS_SERPAPI_API_KEY")
+    )
+    """Enables ``flights_search`` (Google Flights via SerpApi). Free plan: ~250 searches
+    a month; one watch checking every 6 hours uses ~120."""
+
+    # --- subagents and memory (M6) ----------------------------------------------------
+    subagent_model: str = "claude-sonnet-5-5"
+    """Model for ``delegate`` children (focused, read-only research)."""
+    memory_embeddings: Literal["local", "none"] = "local"
+    """``local``: semantic recall with a small model on this machine (downloaded once,
+    about 67 MB, into ~/.cache/kairos/models). ``none``: keyword recall only."""
+    memory_reflection: bool = False
+    """After each completed chat turn, ask ``job_model`` to propose memories from it
+    (one small model call per turn). Proposals wait for the user's confirmation."""
+
+    # --- browser and MCP (M6) -------------------------------------------------------
+    browser: bool = False
+    """Offer the isolated browser (``browser_*`` tools) through its MCP server. Needs
+    Chromium: ``uv run playwright install chromium``."""
+    mcp_servers: list[McpServerConfig] = []
+    """Extra MCP servers, as JSON. Their tools need approval and their output is treated
+    as untrusted unless a server's ``tools`` entry says otherwise."""
 
     # --- notifications (M4) ---------------------------------------------------------
     email_provider: Literal["ses", "smtp"] | None = None
@@ -67,6 +91,7 @@ class Settings(BaseSettings):
 
     @field_validator(
         "tavily_api_key",
+        "serpapi_api_key",
         "email_provider",
         "email_to",
         "email_from",

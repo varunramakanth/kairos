@@ -11,6 +11,7 @@ default:
 # Install Python and web dependencies
 sync:
     uv sync --all-packages --all-extras
+    uv run playwright install chromium
     # macOS can flag files in iCloud-synced folders as hidden, and Python 3.13 skips
     # hidden .pth files, which breaks editable installs (see CLAUDE.md).
     @if [ "$(uname)" = "Darwin" ]; then chflags -R nohidden .venv; fi
@@ -81,7 +82,7 @@ record-cassettes:
 record-live *cases:
     LIVE=1 uv run python -m tests.evals.record_live {{ cases }}
 
-suites := "tests.evals.suites:intent_tools tests.evals.suites:scheduling tests.evals.suites:safety tests.evals.suites:conversations"
+suites := "tests.evals.suites:intent_tools tests.evals.suites:scheduling tests.evals.suites:safety tests.evals.suites:conversations tests.evals.suites:browser tests.evals.suites:m6"
 
 # Replay the M5 suites and write their summary as the new regression baseline
 evals-baseline:

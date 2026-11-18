@@ -2,7 +2,7 @@
 
 import asyncio
 from collections.abc import AsyncGenerator
-from contextlib import asynccontextmanager
+from contextlib import AsyncExitStack, asynccontextmanager
 from importlib.metadata import version
 
 import structlog
@@ -11,9 +11,11 @@ from sqlalchemy.ext.asyncio import AsyncEngine
 
 from kairos_db import EventPublisher, JobStore, Lease, RunQueue
 from kairos_db.governance import ApprovalStore, AuditStore, NotificationStore, SettingsStore
+from kairos_db.memories import MemoryStore
 from kairos_domain.governance import ApprovalStatus
 from kairos_domain.jobs import JobStatus
 from kairos_harness import Clock, HookChain, Hooks, Provider, RunContext, SystemClock
+from kairos_memory.reflection import ReflectionHooks
 from kairos_notify import (
     Channel,
     ConsoleChannel,
@@ -26,9 +28,18 @@ from kairos_policy import PolicyHooks
 from kairos_scheduler.scheduler import DIGEST_JOB_ID, Scheduler, digest_spec
 from kairos_scheduler.timing import next_fire
 from kairos_telemetry import TracingHooks, configure_tracing
+from kairos_tools.mcp import open_toolsets
 from kairos_worker.audit import AuditHooks
 from kairos_worker.settings import Settings
-from kairos_worker.wiring import Runtime, build_provider, build_tools, http_client
+from kairos_worker.wiring import (
+    Runtime,
+    add_delegate,
+    build_provider,
+    build_tools,
+    http_client,
+    mcp_configs,
+    memory_store,
+)
 from kairos_worker.worker import Worker
 
 HARNESS_VERSION = version("kairos-harness")
@@ -69,11 +80,11 @@ async def open_runtime(
     """
     provider = provider or build_provider(settings)
     tracer_provider, tracing_hooks = tracing(settings, provider)
-    async with http_client() as http:
+    async with http_client() as http, AsyncExitStack() as stack:
         try:
+            memories = memory_store(settings, engine) if engine is not None else None
             if engine is None:
                 tools = build_tools(settings, http, clock=clock)
-                hooks: list[Hooks] = [PolicyHooks()]
             else:
                 notifications = NotificationStore(engine)
                 tools = build_tools(
@@ -81,14 +92,28 @@ async def open_runtime(
                     http,
                     jobs=JobStore(engine),
                     notify=lambda n, key: notifications.enqueue(n, dedupe_key=key),
+                    memory=memories,
                     clock=clock,
                 )
-                hooks = [
+            # MCP tools (the browser, configured servers) come after the built-ins, and
+            # before the hooks, which read every tool's risk.
+            for toolset in await open_toolsets(stack, mcp_configs(settings)):
+                for item in toolset.tools:
+                    tools.register(item)
+            hooks: list[Hooks] = (
+                [PolicyHooks()]
+                if engine is None
+                else [
                     PolicyHooks(actions_enabled=SettingsStore(engine).actions_enabled),
                     AuditHooks(AuditStore(engine), tools.specs()),
                 ]
+            )
+            if memories is not None and settings.memory_reflection:
+                hooks.append(ReflectionHooks(provider, memories, model=settings.job_model))
             # Policy first (its decision wins), tracing last (it sees the final state).
-            yield Runtime(settings, provider, tools, HookChain([*hooks, tracing_hooks]))
+            chain = HookChain([*hooks, tracing_hooks])
+            add_delegate(tools, settings, provider, hooks=chain, clock=clock)
+            yield Runtime(settings, provider, tools, chain)
         finally:
             tracer_provider.shutdown()
 
@@ -201,4 +226,14 @@ async def work(
                 scheduler.run_forever(stop, poll_seconds=settings.scheduler_poll_seconds)
             )
             group.create_task(dispatcher.run_forever(stop))
+            group.create_task(backfill_memories(memory_store(settings, engine)))
         log.info("worker_stopped")
+
+
+async def backfill_memories(store: MemoryStore) -> None:
+    """Embed memories saved before the model was available. Best effort, once."""
+    try:
+        if done := await store.backfill():
+            log.info("memories_backfilled", count=done)
+    except Exception as error:
+        log.warning("memory_backfill_failed", error=str(error))

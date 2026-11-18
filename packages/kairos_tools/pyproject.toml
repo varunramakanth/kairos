@@ -6,7 +6,10 @@ requires-python = ">=3.12"
 dependencies = [
     "httpx2>=2.16",
     "kairos-domain",
+    "kairos-harness",
+    "mcp>=2.3,<3",
     "pydantic>=2.11",
+    "structlog>=25.4",
     "trafilatura>=2.3",
 ]
 
@@ -16,3 +19,4 @@ build-backend = "uv_build"
 
 [tool.uv.sources]
 kairos-domain = { workspace = true }
+kairos-harness = { workspace = true }

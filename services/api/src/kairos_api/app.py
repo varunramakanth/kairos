@@ -43,6 +43,7 @@ from kairos_db.governance import (
     NotificationStore,
     SettingsStore,
 )
+from kairos_db.memories import MemoryStore
 from kairos_domain.base import DomainModel
 from kairos_domain.content import Message
 from kairos_domain.evals import EvalRunDetail, EvalRunSummary
@@ -58,11 +59,13 @@ from kairos_domain.governance import (
     StoredNotification,
 )
 from kairos_domain.jobs import Job, JobDetail, JobKind, JobSpec, JobStatus, JobSummary
+from kairos_domain.memory import Memory, MemoryCreate, MemorySource, MemoryStatus, MemoryUpdate
 from kairos_domain.run import RunRequest
 from kairos_domain.threads import RunDetail, Thread, ThreadDetail
 from kairos_harness import Provider, SystemClock
 from kairos_scheduler.timing import ScheduleError, next_fire, validate
 from kairos_worker.service import open_runtime, work
+from kairos_worker.wiring import memory_store
 
 API_VERSION = "0.2.0"
 
@@ -150,6 +153,7 @@ class Services:
     app_settings: SettingsStore
     notifications: NotificationStore
     evals: EvalStore
+    memories: MemoryStore
 
 
 def _operation_id(route: APIRoute) -> str:
@@ -202,6 +206,7 @@ def create_app(
             app_settings=SettingsStore(engine),
             notifications=NotificationStore(engine),
             evals=EvalStore(engine),
+            memories=memory_store(settings, engine),
         )
         stop = asyncio.Event()
         async with AsyncExitStack() as stack:
@@ -230,7 +235,7 @@ def create_app(
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.cors_origins,
-        allow_methods=["GET", "POST", "PATCH", "PUT"],
+        allow_methods=["GET", "POST", "PATCH", "PUT", "DELETE"],
         allow_headers=["Content-Type", "Last-Event-ID"],
     )
 
@@ -458,6 +463,54 @@ def create_app(
         request: Request, before: int | None = None, limit: Annotated[int, Query(le=500)] = 200
     ) -> list[AuditEntry]:
         return await services(request).audit.recent(limit=limit, before_id=before)
+
+    @app.get("/memories", tags=["memory"])
+    async def list_memories(
+        request: Request,
+        status: MemoryStatus | None = None,
+        q: str | None = None,
+        limit: Annotated[int, Query(ge=1, le=500)] = 200,
+    ) -> list[Memory]:
+        """Newest first; with ``q``, the active memories that match it, best first."""
+        store = services(request).memories
+        if q:
+            return list(await store.search(q, limit=limit))
+        return list(await store.recent(status=status, limit=limit))
+
+    @app.post("/memories", status_code=201, tags=["memory"])
+    async def create_memory(request: Request, body: MemoryCreate) -> Memory:
+        """A memory written by the user: active at once."""
+        memory = await services(request).memories.create(
+            body.content, body.kind, source=MemorySource.USER, status=MemoryStatus.ACTIVE
+        )
+        await services(request).audit.record(
+            actor="user", action="memory.created", subject=memory.id
+        )
+        return memory
+
+    @app.patch("/memories/{memory_id}", tags=["memory"])
+    async def update_memory(request: Request, memory_id: str, body: MemoryUpdate) -> Memory:
+        """Edit or re-classify a memory, or confirm a proposal (``status: active``)."""
+        before = await services(request).memories.get(memory_id)
+        memory = await services(request).memories.update(memory_id, body)
+        if memory is None or before is None:
+            raise HTTPException(status_code=404, detail=f"memory {memory_id} not found")
+        confirmed = before.status is MemoryStatus.PROPOSED and memory.status is MemoryStatus.ACTIVE
+        await services(request).audit.record(
+            actor="user",
+            action="memory.confirmed" if confirmed else "memory.updated",
+            subject=memory_id,
+            run_id=memory.run_id,
+        )
+        return memory
+
+    @app.delete("/memories/{memory_id}", status_code=204, tags=["memory"])
+    async def delete_memory(request: Request, memory_id: str) -> None:
+        if not await services(request).memories.delete(memory_id):
+            raise HTTPException(status_code=404, detail=f"memory {memory_id} not found")
+        await services(request).audit.record(
+            actor="user", action="memory.deleted", subject=memory_id
+        )
 
     @app.get("/evals/runs", tags=["evals"])
     async def list_eval_runs(

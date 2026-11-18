@@ -13,8 +13,10 @@ Each case gets a fixed clock (``Example.now``, default ``REFERENCE_NOW``) so rel
 times such as "tomorrow at 8" mean the same thing on every replay.
 """
 
+import json
 import tempfile
 from collections.abc import Sequence
+from contextlib import AsyncExitStack
 from datetime import UTC, datetime
 from importlib.metadata import version
 from pathlib import Path
@@ -28,6 +30,7 @@ from kairos_domain.content import Message
 from kairos_domain.events import RunFinished
 from kairos_domain.governance import Notification
 from kairos_domain.jobs import Job, JobSpec, JobStatus
+from kairos_domain.memory import Memory, MemoryKind, MemorySource, MemoryStatus
 from kairos_domain.run import RunRequest
 from kairos_evals import Example, OtlpJsonTraceSource, Trace, TraceFilter
 from kairos_harness import AgentLoop, FakeClock, HookChain, InMemoryCheckpointer, SeededIdGenerator
@@ -37,6 +40,7 @@ from kairos_harness.cassette import (
     ReplayProvider,
     ReplayToolExecutor,
 )
+from kairos_memory.testing import MemoryMemories
 from kairos_policy import PolicyHooks
 from kairos_scheduler.testing import MemoryJobs
 from kairos_telemetry import OtlpJsonFileExporter, TracingHooks, configure_tracing
@@ -46,6 +50,10 @@ CASSETTES = ROOT / "cassettes" / "m5"
 REFERENCE_NOW = datetime(2026, 11, 18, 19, 0, tzinfo=UTC)
 """Wednesday 18 November 2026, 14:00 in Toronto."""
 AGENT_MODEL = "claude-sonnet-5-5"
+BROWSER_TAG = "browser"
+MEMORY_TAG = "memory"
+"""Cases with this tag get the memory tools, seeded from ``metadata.memories``."""
+"""Cases with this tag also get the browser tools (live: the real browser service)."""
 
 
 def _job(
@@ -100,6 +108,25 @@ STANDARD_JOBS: tuple[Job, ...] = (
     _job("job_lunch_walk", "Lunch walk reminder", _cron("0 12 * * 1-5"), status="paused"),
 )
 """The user's existing jobs in every case, so "pause my news digest" has a target."""
+
+
+def seeded_memories(example: Example) -> MemoryMemories:
+    """The user's confirmed memories for a case (``metadata.memories``)."""
+    store = MemoryMemories()
+    raw = example.metadata.get("memories")
+    for i, item in enumerate(raw if isinstance(raw, list) else []):
+        if isinstance(item, dict):
+            store.items[f"mem_seed{i}"] = Memory(
+                id=f"mem_seed{i}",
+                kind=MemoryKind(str(item.get("kind", "preference"))),
+                content=str(item.get("content", "")),
+                status=MemoryStatus.ACTIVE,
+                source=MemorySource.USER,
+                run_id=None,
+                created_at=REFERENCE_NOW,
+                updated_at=REFERENCE_NOW,
+            )
+    return store
 
 
 def seeded_jobs() -> MemoryJobs:
@@ -223,14 +250,32 @@ class KairosAdapter:
     ) -> RunFinished:
         # Imported here so replay never needs API keys or worker settings.
         from kairos_providers import anthropic_provider
+        from kairos_tools.mcp import McpToolset
         from kairos_worker.settings import Settings
-        from kairos_worker.wiring import build_tools
+        from kairos_worker.wiring import BROWSER_SERVER, build_tools
 
         for path in (model_path, tool_path):
             path.unlink(missing_ok=True)  # a re-recording replaces the old one
         transport = FixtureTransport(fixture_pages(example), httpx2.AsyncHTTPTransport())
-        async with httpx2.AsyncClient(transport=transport, follow_redirects=False) as http:
-            tools = build_tools(Settings(), http, jobs=seeded_jobs(), notify=_discard, clock=clock)
+        async with (
+            httpx2.AsyncClient(transport=transport, follow_redirects=False) as http,
+            AsyncExitStack() as stack,
+        ):
+            memory = seeded_memories(example) if MEMORY_TAG in example.tags else None
+            tools = build_tools(
+                Settings(), http, jobs=seeded_jobs(), notify=_discard, memory=memory, clock=clock
+            )
+            if BROWSER_TAG in example.tags:
+                # Only browser cases get the browser: adding its tools to every case would
+                # change every recorded request. Planted pages are served by the browser.
+                pages = Path(stack.enter_context(tempfile.TemporaryDirectory())) / "pages.json"
+                pages.write_text(json.dumps(fixture_pages(example)))
+                config = BROWSER_SERVER.model_copy(
+                    update={"env": {"KAIROS_BROWSER_FIXTURES": str(pages)}}
+                )
+                toolset = await stack.enter_async_context(McpToolset(config))
+                for item in toolset.tools:
+                    tools.register(item)
             loop = AgentLoop(
                 provider=RecordingProvider(anthropic_provider(), model_path),
                 tools=RecordingToolExecutor(tools, tool_path),

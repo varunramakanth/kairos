@@ -828,6 +828,77 @@ export type KillSwitch = {
 };
 
 /**
+ * Memory
+ */
+export type Memory = {
+    /**
+     * Id
+     */
+    id: string;
+    kind: MemoryKind;
+    /**
+     * Content
+     */
+    content: string;
+    status: MemoryStatus;
+    source: MemorySource;
+    /**
+     * Run Id
+     */
+    run_id: string | null;
+    /**
+     * Created At
+     */
+    created_at: string;
+    /**
+     * Updated At
+     */
+    updated_at: string;
+};
+
+/**
+ * MemoryCreate
+ *
+ * A memory written by the user in the UI: active at once.
+ */
+export type MemoryCreate = {
+    kind?: MemoryKind;
+    /**
+     * Content
+     */
+    content: string;
+};
+
+/**
+ * MemoryKind
+ */
+export type MemoryKind = 'profile' | 'preference' | 'episodic' | 'task';
+
+/**
+ * MemorySource
+ */
+export type MemorySource = 'user' | 'agent' | 'reflection';
+
+/**
+ * MemoryStatus
+ */
+export type MemoryStatus = 'proposed' | 'active';
+
+/**
+ * MemoryUpdate
+ *
+ * Edit, re-classify or confirm a memory. Unset fields stay as they are.
+ */
+export type MemoryUpdate = {
+    kind?: MemoryKind | null;
+    /**
+     * Content
+     */
+    content?: string | null;
+    status?: MemoryStatus | null;
+};
+
+/**
  * Message
  */
 export type Message = {
@@ -2467,6 +2538,131 @@ export type ListAuditResponses = {
 };
 
 export type ListAuditResponse = ListAuditResponses[keyof ListAuditResponses];
+
+export type ListMemoriesData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Status
+         */
+        status?: MemoryStatus | null;
+        /**
+         * Q
+         */
+        q?: string | null;
+        /**
+         * Limit
+         */
+        limit?: number;
+    };
+    url: '/memories';
+};
+
+export type ListMemoriesErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type ListMemoriesError = ListMemoriesErrors[keyof ListMemoriesErrors];
+
+export type ListMemoriesResponses = {
+    /**
+     * Response List Memories
+     *
+     * Successful Response
+     */
+    200: Array<Memory>;
+};
+
+export type ListMemoriesResponse = ListMemoriesResponses[keyof ListMemoriesResponses];
+
+export type CreateMemoryData = {
+    body: MemoryCreate;
+    path?: never;
+    query?: never;
+    url: '/memories';
+};
+
+export type CreateMemoryErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type CreateMemoryError = CreateMemoryErrors[keyof CreateMemoryErrors];
+
+export type CreateMemoryResponses = {
+    /**
+     * Successful Response
+     */
+    201: Memory;
+};
+
+export type CreateMemoryResponse = CreateMemoryResponses[keyof CreateMemoryResponses];
+
+export type DeleteMemoryData = {
+    body?: never;
+    path: {
+        /**
+         * Memory Id
+         */
+        memory_id: string;
+    };
+    query?: never;
+    url: '/memories/{memory_id}';
+};
+
+export type DeleteMemoryErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type DeleteMemoryError = DeleteMemoryErrors[keyof DeleteMemoryErrors];
+
+export type DeleteMemoryResponses = {
+    /**
+     * Successful Response
+     */
+    204: void;
+};
+
+export type DeleteMemoryResponse = DeleteMemoryResponses[keyof DeleteMemoryResponses];
+
+export type UpdateMemoryData = {
+    body: MemoryUpdate;
+    path: {
+        /**
+         * Memory Id
+         */
+        memory_id: string;
+    };
+    query?: never;
+    url: '/memories/{memory_id}';
+};
+
+export type UpdateMemoryErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type UpdateMemoryError = UpdateMemoryErrors[keyof UpdateMemoryErrors];
+
+export type UpdateMemoryResponses = {
+    /**
+     * Successful Response
+     */
+    200: Memory;
+};
+
+export type UpdateMemoryResponse = UpdateMemoryResponses[keyof UpdateMemoryResponses];
 
 export type ListEvalRunsData = {
     body?: never;

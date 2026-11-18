@@ -68,6 +68,8 @@ class TracingHooks:
             attributes[a.THREAD_ID] = thread_id
             attributes[a.CONVERSATION_ID] = thread_id
             attributes[a.LANGFUSE_SESSION_ID] = thread_id
+        if parent := state.request.metadata.get("parent_run_id"):
+            attributes[a.PARENT_RUN_ID] = parent
         if job_id := state.request.metadata.get("job_id"):
             attributes[a.JOB_ID] = job_id
         return attributes

@@ -8,6 +8,7 @@ dependencies = [
     "kairos-db",
     "kairos-domain",
     "kairos-harness",
+    "kairos-memory",
     "kairos-notify",
     "kairos-policy",
     "kairos-providers",
@@ -29,6 +30,7 @@ build-backend = "uv_build"
 [tool.uv.sources]
 kairos-domain = { workspace = true }
 kairos-harness = { workspace = true }
+kairos-memory = { workspace = true }
 kairos-providers = { workspace = true }
 kairos-tools = { workspace = true }
 kairos-db = { workspace = true }

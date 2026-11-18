@@ -78,6 +78,14 @@ export type AppSettings = {
      * Timezone
      */
     timezone: string;
+    /**
+     * Spent Today Usd
+     */
+    spent_today_usd: number;
+    /**
+     * Daily Spend Cap Usd
+     */
+    daily_spend_cap_usd: number | null;
 };
 
 /**
@@ -1765,6 +1773,10 @@ export type ToolCallResult = {
      * Duration Ms
      */
     duration_ms: number;
+    /**
+     * Suspected Injection
+     */
+    suspected_injection?: boolean;
 };
 
 /**

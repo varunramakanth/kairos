@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine
 from kairos_db import EventPublisher, JobStore, Lease, RunQueue
 from kairos_db.governance import ApprovalStore, AuditStore, NotificationStore, SettingsStore
 from kairos_db.memories import MemoryStore
+from kairos_db.spend import SpendLedger
 from kairos_domain.governance import ApprovalStatus
 from kairos_domain.jobs import JobStatus
 from kairos_harness import Clock, HookChain, Hooks, Provider, RunContext, SystemClock
@@ -31,6 +32,7 @@ from kairos_telemetry import TracingHooks, configure_tracing
 from kairos_tools.mcp import open_toolsets
 from kairos_worker.audit import AuditHooks
 from kairos_worker.settings import Settings
+from kairos_worker.spend import SpendCap, SpendCapHooks
 from kairos_worker.wiring import (
     Runtime,
     add_delegate,
@@ -105,6 +107,11 @@ async def open_runtime(
                 [PolicyHooks()]
                 if engine is None
                 else [
+                    SpendCapHooks(
+                        spend_cap(settings, engine, clock or SystemClock()),
+                        NotificationStore(engine),
+                        clock=clock or SystemClock(),
+                    ),
                     PolicyHooks(actions_enabled=SettingsStore(engine).actions_enabled),
                     AuditHooks(AuditStore(engine), tools.specs()),
                 ]
@@ -230,6 +237,11 @@ async def work(
             group.create_task(dispatcher.run_forever(stop))
             group.create_task(backfill_memories(memory_store(settings, engine)))
         log.info("worker_stopped")
+
+
+def spend_cap(settings: Settings, engine: AsyncEngine, clock: Clock) -> SpendCap:
+    ledger = SpendLedger(engine, timezone=settings.timezone)
+    return SpendCap(ledger, cap_usd=settings.daily_spend_cap_usd, clock=clock)
 
 
 async def backfill_memories(store: MemoryStore) -> None:

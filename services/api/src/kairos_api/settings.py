@@ -12,3 +12,7 @@ class ApiSettings(Settings):
     embedded_worker: bool = False
     """Run a worker inside the API process. Convenient locally (one command); in
     production the worker runs as its own service."""
+
+    rate_limit_per_minute: int = 20
+    """Requests per minute, per client, to endpoints that start work (chat turns, job
+    runs, test notifications). Beyond it the API answers 429 with Retry-After."""

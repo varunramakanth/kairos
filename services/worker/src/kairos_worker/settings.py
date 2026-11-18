@@ -50,6 +50,9 @@ class Settings(BaseSettings):
     a month; one watch checking every 6 hours uses ~120."""
 
     # --- hardening (M7) -------------------------------------------------------------
+    daily_spend_cap_usd: float | None = Field(default=5.0, gt=0)
+    """Model spend per local day (``timezone``) after which runs and job firings stop
+    until midnight, and the owner is notified once. Unset for no cap."""
     injection_screening: Literal["model", "patterns", "off"] = "model"
     """Screen untrusted tool output: patterns always, and with ``model`` the job model
     decides pattern matches (a fraction of a cent each). ``patterns`` flags every match."""

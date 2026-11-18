@@ -58,7 +58,7 @@ from kairos_domain.run import (
     ToolCallStatus,
 )
 from kairos_domain.tools import Deny, RequireApproval, ToolContext, ToolOutput, ToolSpec
-from kairos_harness.budget import PriceTable, exceeded
+from kairos_harness.budget import BudgetStop, PriceTable, exceeded
 from kairos_harness.clock import SystemClock, UuidIdGenerator
 from kairos_harness.compaction import estimate_tokens, new_epoch, summary_request_messages
 from kairos_harness.context import (
@@ -187,6 +187,9 @@ class AgentLoop:
             # Another process owns the run now. Write nothing more.
             await self._hooks.on_error(state, error)
             raise
+        except BudgetStop as stop:
+            async for event in self._finish(session, StopReason.BUDGET_EXCEEDED, error=str(stop)):
+                yield event
         except Exception as error:
             await self._hooks.on_error(state, error)
             message = f"{type(error).__name__}: {error}"

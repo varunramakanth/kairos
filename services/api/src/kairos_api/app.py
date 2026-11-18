@@ -24,6 +24,7 @@ from fastapi.sse import EventSourceResponse, ServerSentEvent
 from pydantic import Field
 from sqlalchemy.ext.asyncio import AsyncEngine
 
+from kairos_api.limits import RateLimiter
 from kairos_api.settings import ApiSettings
 from kairos_api.streams import run_event_stream
 from kairos_db import (
@@ -64,7 +65,8 @@ from kairos_domain.run import RunRequest
 from kairos_domain.threads import RunDetail, Thread, ThreadDetail
 from kairos_harness import Provider, SystemClock
 from kairos_scheduler.timing import ScheduleError, next_fire, validate
-from kairos_worker.service import open_runtime, work
+from kairos_worker.service import open_runtime, spend_cap, work
+from kairos_worker.spend import SpendCap
 from kairos_worker.wiring import memory_store
 
 API_VERSION = "0.2.0"
@@ -119,6 +121,9 @@ class AppSettings(DomainModel):
     push_configured: bool
     vapid_public_key: str | None
     timezone: str
+    spent_today_usd: float
+    """Model spend so far today (local day), across all runs."""
+    daily_spend_cap_usd: float | None
 
 
 class KillSwitch(DomainModel):
@@ -154,6 +159,7 @@ class Services:
     notifications: NotificationStore
     evals: EvalStore
     memories: MemoryStore
+    spend: SpendCap
 
 
 def _operation_id(route: APIRoute) -> str:
@@ -207,6 +213,7 @@ def create_app(
             notifications=NotificationStore(engine),
             evals=EvalStore(engine),
             memories=memory_store(settings, engine),
+            spend=spend_cap(settings, engine, SystemClock()),
         )
         stop = asyncio.Event()
         async with AsyncExitStack() as stack:
@@ -280,7 +287,25 @@ def create_app(
     async def list_threads(request: Request) -> list[Thread]:
         return await services(request).threads.recent()
 
-    @app.post("/threads", status_code=201, tags=["threads"])
+    limiter = RateLimiter(limit=settings.rate_limit_per_minute, per_seconds=60.0)
+
+    def rate_limited(request: Request) -> None:
+        """Dependency: at most ``rate_limit_per_minute`` work-starting calls per client."""
+        client = request.client.host if request.client else "unknown"
+        if (wait := limiter.check(client)) is not None:
+            raise HTTPException(
+                status_code=429,
+                detail="too many requests; slow down",
+                headers={"Retry-After": str(max(1, round(wait)))},
+            )
+
+    async def admit_run(request: Request) -> None:
+        """Dependency for anything that starts a model run: rate limit and spend cap."""
+        rate_limited(request)
+        if reason := await services(request).spend.blocked():
+            raise HTTPException(status_code=429, detail=reason)
+
+    @app.post("/threads", status_code=201, tags=["threads"], dependencies=[Depends(admit_run)])
     async def create_thread(request: Request, body: NewMessage) -> RunAccepted:
         """Start a conversation with its first message."""
         svc = services(request)
@@ -292,7 +317,12 @@ def create_app(
     async def get_thread(request: Request, thread_id: str) -> ThreadDetail:
         return await services(request).threads.get(thread_id)
 
-    @app.post("/threads/{thread_id}/messages", status_code=202, tags=["threads"])
+    @app.post(
+        "/threads/{thread_id}/messages",
+        status_code=202,
+        tags=["threads"],
+        dependencies=[Depends(admit_run)],
+    )
     async def send_message(request: Request, thread_id: str, body: NewMessage) -> RunAccepted:
         """Add a turn. Returns 409 while the thread's previous run is still going."""
         run = await services(request).threads.start_turn(thread_id, build_request(thread_id, body))
@@ -424,7 +454,7 @@ def create_app(
         await svc.audit.record(actor="user", action="job.confirmed", subject=job_id)
         return updated
 
-    @app.post("/jobs/{job_id}/run", tags=["jobs"])
+    @app.post("/jobs/{job_id}/run", tags=["jobs"], dependencies=[Depends(admit_run)])
     async def run_job_now(request: Request, job_id: str) -> Job:
         """Fire an active job at the next scheduler tick instead of waiting."""
         job = await job_or_404(request, job_id)
@@ -536,6 +566,8 @@ def create_app(
             push_configured=settings.push_configured,
             vapid_public_key=settings.vapid_public_key,
             timezone=settings.timezone,
+            spent_today_usd=round(await services(request).spend.ledger.spent_today(clock.now()), 4),
+            daily_spend_cap_usd=settings.daily_spend_cap_usd,
         )
 
     @app.get("/settings", tags=["settings"])
@@ -565,7 +597,12 @@ def create_app(
     async def list_notifications(request: Request) -> list[StoredNotification]:
         return await services(request).notifications.recent()
 
-    @app.post("/notifications/test", status_code=202, tags=["notifications"])
+    @app.post(
+        "/notifications/test",
+        status_code=202,
+        tags=["notifications"],
+        dependencies=[Depends(rate_limited)],
+    )
     async def send_test_notification(request: Request, body: TestNotification) -> Queued:
         """Queue a test message on the chosen channels (console and push by default)."""
         await services(request).notifications.enqueue(

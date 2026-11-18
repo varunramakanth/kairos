@@ -38,6 +38,7 @@ from kairos_harness import (
     AgentLoop,
     Allow,
     BaseHooks,
+    BudgetStop,
     Deny,
     FakeClock,
     InMemoryCheckpointer,
@@ -724,3 +725,15 @@ def test_pending_summary_lists_calls_held_with_the_gated_one() -> None:
         f"- schedule_create (name: Fare watch, body: {'x' * 119}…)",
         "Approve or decline it in Kairos; nothing happens until you do.",
     ]
+
+
+async def test_a_hook_can_stop_a_run_as_budget_exceeded() -> None:
+    class Capped(BaseHooks):
+        async def before_model(self, state: RunState, request: ModelRequest) -> ModelRequest:
+            raise BudgetStop("daily spend cap of $5.00 reached")
+
+    h = Harness([text_turn("never")], [], hooks=Capped())
+    events = await h.run()
+    done = finished(events)
+    assert done.stop_reason is StopReason.BUDGET_EXCEEDED
+    assert done.error == "daily spend cap of $5.00 reached"

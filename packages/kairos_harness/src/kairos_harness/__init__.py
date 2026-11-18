@@ -1,7 +1,7 @@
 """The agent loop: model calls, tool dispatch, context management, hooks, budgets, checkpoints."""
 
 from kairos_domain.tools import Allow, Deny, RequireApproval, ToolDecision
-from kairos_harness.budget import ModelPrice, PriceTable
+from kairos_harness.budget import BudgetStop, ModelPrice, PriceTable
 from kairos_harness.checkpoint import InMemoryCheckpointer
 from kairos_harness.clock import FakeClock, SeededIdGenerator, SystemClock, UuidIdGenerator
 from kairos_harness.hooks import BaseHooks, HookChain
@@ -22,6 +22,7 @@ __all__ = [
     "AgentLoop",
     "Allow",
     "BaseHooks",
+    "BudgetStop",
     "Checkpointer",
     "Clock",
     "ContentScreen",

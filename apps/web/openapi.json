@@ -1528,6 +1528,21 @@
           "timezone": {
             "type": "string",
             "title": "Timezone"
+          },
+          "spent_today_usd": {
+            "type": "number",
+            "title": "Spent Today Usd"
+          },
+          "daily_spend_cap_usd": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Daily Spend Cap Usd"
           }
         },
         "additionalProperties": false,
@@ -1538,7 +1553,9 @@
           "email_configured",
           "push_configured",
           "vapid_public_key",
-          "timezone"
+          "timezone",
+          "spent_today_usd",
+          "daily_spend_cap_usd"
         ],
         "title": "AppSettings"
       },
@@ -4277,6 +4294,11 @@
           "duration_ms": {
             "type": "integer",
             "title": "Duration Ms"
+          },
+          "suspected_injection": {
+            "type": "boolean",
+            "title": "Suspected Injection",
+            "default": false
           }
         },
         "additionalProperties": false,

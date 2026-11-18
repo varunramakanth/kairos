@@ -44,6 +44,13 @@ class Settings(BaseSettings):
     )
     """Enables ``web_search``. Without it the tool is not offered to the model."""
 
+    # --- subagents and memory (M6) ----------------------------------------------------
+    subagent_model: str = "claude-sonnet-5-5"
+    """Model for ``delegate`` children (focused, read-only research)."""
+    memory_reflection: bool = False
+    """After each completed chat turn, ask ``job_model`` to propose memories from it
+    (one small model call per turn). Proposals wait for the user's confirmation."""
+
     # --- browser and MCP (M6) -------------------------------------------------------
     browser: bool = False
     """Offer the isolated browser (``browser_*`` tools) through its MCP server. Needs

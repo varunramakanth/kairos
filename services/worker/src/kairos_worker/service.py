@@ -11,9 +11,11 @@ from sqlalchemy.ext.asyncio import AsyncEngine
 
 from kairos_db import EventPublisher, JobStore, Lease, RunQueue
 from kairos_db.governance import ApprovalStore, AuditStore, NotificationStore, SettingsStore
+from kairos_db.memories import MemoryStore
 from kairos_domain.governance import ApprovalStatus
 from kairos_domain.jobs import JobStatus
 from kairos_harness import Clock, HookChain, Hooks, Provider, RunContext, SystemClock
+from kairos_memory.reflection import ReflectionHooks
 from kairos_notify import (
     Channel,
     ConsoleChannel,
@@ -29,7 +31,14 @@ from kairos_telemetry import TracingHooks, configure_tracing
 from kairos_tools.mcp import open_toolsets
 from kairos_worker.audit import AuditHooks
 from kairos_worker.settings import Settings
-from kairos_worker.wiring import Runtime, build_provider, build_tools, http_client, mcp_configs
+from kairos_worker.wiring import (
+    Runtime,
+    add_delegate,
+    build_provider,
+    build_tools,
+    http_client,
+    mcp_configs,
+)
 from kairos_worker.worker import Worker
 
 HARNESS_VERSION = version("kairos-harness")
@@ -72,6 +81,7 @@ async def open_runtime(
     tracer_provider, tracing_hooks = tracing(settings, provider)
     async with http_client() as http, AsyncExitStack() as stack:
         try:
+            memories = MemoryStore(engine) if engine is not None else None
             if engine is None:
                 tools = build_tools(settings, http, clock=clock)
             else:
@@ -81,6 +91,7 @@ async def open_runtime(
                     http,
                     jobs=JobStore(engine),
                     notify=lambda n, key: notifications.enqueue(n, dedupe_key=key),
+                    memory=memories,
                     clock=clock,
                 )
             # MCP tools (the browser, configured servers) come after the built-ins, and
@@ -96,8 +107,12 @@ async def open_runtime(
                     AuditHooks(AuditStore(engine), tools.specs()),
                 ]
             )
+            if memories is not None and settings.memory_reflection:
+                hooks.append(ReflectionHooks(provider, memories, model=settings.job_model))
             # Policy first (its decision wins), tracing last (it sees the final state).
-            yield Runtime(settings, provider, tools, HookChain([*hooks, tracing_hooks]))
+            chain = HookChain([*hooks, tracing_hooks])
+            add_delegate(tools, settings, provider, hooks=chain, clock=clock)
+            yield Runtime(settings, provider, tools, chain)
         finally:
             tracer_provider.shutdown()
 

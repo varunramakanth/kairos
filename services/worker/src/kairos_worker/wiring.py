@@ -20,6 +20,9 @@ from kairos_harness import (
     ToolExecutor,
 )
 from kairos_harness.cassette import ReplayProvider
+from kairos_harness.subagents import SubagentProfile, Subagents
+from kairos_memory.protocols import MemoryRepository
+from kairos_memory.tools import memory_tools
 from kairos_notify.tools import Enqueue, notify_tool
 from kairos_providers import anthropic_provider, bedrock_provider
 from kairos_scheduler.protocols import JobRepository
@@ -28,6 +31,7 @@ from kairos_tools import ToolRegistry
 from kairos_tools.builtin import current_time_tool
 from kairos_tools.mcp import McpServerConfig, McpToolPolicy
 from kairos_tools.plan import plan_tool
+from kairos_tools.subagent import delegate_tool
 from kairos_tools.web import web_fetch_tool, web_search_tool
 from kairos_worker.settings import Settings
 
@@ -83,6 +87,7 @@ def build_tools(
     *,
     jobs: JobRepository | None = None,
     notify: Enqueue | None = None,
+    memory: MemoryRepository | None = None,
     clock: Clock | None = None,
 ) -> ToolRegistry:
     """The tool set, in a fixed order (the order is part of the cached prompt prefix).
@@ -103,7 +108,56 @@ def build_tools(
             tools.register(item)
     if notify is not None:
         tools.register(notify_tool(notify, settings.channels))
+    if memory is not None:
+        for item in memory_tools(memory):
+            tools.register(item)
     return tools
+
+
+SUBAGENT_PROFILES = (
+    SubagentProfile(
+        name="research",
+        description=(
+            "Researches one question on the web (search, read pages, the browser when it is "
+            "enabled) and returns a short cited summary."
+        ),
+        tools=frozenset(
+            {
+                "current_time",
+                "web_search",
+                "web_fetch",
+                "browser_navigate",
+                "browser_snapshot",
+                "browser_extract",
+                "browser_click",
+                "browser_search",
+            }
+        ),
+        instructions="Prefer two or three good sources over many weak ones.",
+    ),
+)
+
+
+def add_delegate(
+    tools: ToolRegistry,
+    settings: Settings,
+    provider: Provider,
+    *,
+    hooks: Hooks | None = None,
+    clock: Clock | None = None,
+) -> Subagents:
+    """Register ``delegate`` last: children use the tools registered so far (read-only
+    ones only), and the tool order stays stable for the prompt cache."""
+    subagents = Subagents(
+        provider=provider,
+        tools=tools,
+        profiles=SUBAGENT_PROFILES,
+        model=settings.subagent_model,
+        hooks=hooks,
+        clock=clock,
+    )
+    tools.register(delegate_tool(subagents))
+    return subagents
 
 
 @dataclass(frozen=True)

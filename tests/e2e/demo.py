@@ -19,8 +19,9 @@ from kairos_domain.run import RunRequest
 from kairos_harness import AgentLoop, InMemoryCheckpointer
 from kairos_harness.cassette import RecordingProvider
 from kairos_harness.testing import ScriptedProvider, Turn, text_turn, tool_turn
+from kairos_memory.testing import MemoryMemories
 from kairos_worker.settings import Settings
-from kairos_worker.wiring import build_tools, http_client
+from kairos_worker.wiring import add_delegate, build_tools, http_client
 
 CASSETTE = Path(__file__).parent / "cassettes" / "demo.jsonl"
 MODEL = "claude-opus-5-5"
@@ -71,13 +72,19 @@ async def _no_notify(notification: Notification, key: str) -> None:
 
 
 async def record() -> None:
-    """Record with the same tool set the API offers (schedule tools included)."""
+    """Record with the same tool set the API offers (schedule, memory and delegate
+    tools included; the browser is off by default)."""
     CASSETTE.unlink(missing_ok=True)
     settings = Settings(_env_file=None)  # type: ignore[call-arg]  # pydantic-settings option
     async with http_client() as http:
+        provider = ScriptedProvider(SCRIPT, name="anthropic")
+        tools = build_tools(
+            settings, http, jobs=_SpecsOnly(), notify=_no_notify, memory=MemoryMemories()
+        )
+        add_delegate(tools, settings, provider)  # the API registers it last, too
         loop = AgentLoop(
-            provider=RecordingProvider(ScriptedProvider(SCRIPT, name="anthropic"), CASSETTE),
-            tools=build_tools(settings, http, jobs=_SpecsOnly(), notify=_no_notify),
+            provider=RecordingProvider(provider, CASSETTE),
+            tools=tools,
             checkpointer=InMemoryCheckpointer(),
         )
         request = RunRequest(run_id="demo", input=PROMPT, model=MODEL)

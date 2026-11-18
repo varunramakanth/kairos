@@ -43,6 +43,11 @@ class Settings(BaseSettings):
         default=None, validation_alias=AliasChoices("TAVILY_API_KEY", "KAIROS_TAVILY_API_KEY")
     )
     """Enables ``web_search``. Without it the tool is not offered to the model."""
+    serpapi_api_key: SecretStr | None = Field(
+        default=None, validation_alias=AliasChoices("SERPAPI_API_KEY", "KAIROS_SERPAPI_API_KEY")
+    )
+    """Enables ``flights_search`` (Google Flights via SerpApi). Free plan: ~250 searches
+    a month; one watch checking every 6 hours uses ~120."""
 
     # --- subagents and memory (M6) ----------------------------------------------------
     subagent_model: str = "claude-sonnet-5-5"
@@ -86,6 +91,7 @@ class Settings(BaseSettings):
 
     @field_validator(
         "tavily_api_key",
+        "serpapi_api_key",
         "email_provider",
         "email_to",
         "email_from",

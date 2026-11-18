@@ -32,6 +32,7 @@ from kairos_scheduler.protocols import JobRepository
 from kairos_scheduler.tools import record_observation_tool, schedule_tools
 from kairos_tools import ToolRegistry
 from kairos_tools.builtin import current_time_tool
+from kairos_tools.flights import FlightProvider, SerpApiFlights, flights_search_tool
 from kairos_tools.mcp import McpServerConfig, McpToolPolicy
 from kairos_tools.plan import plan_tool
 from kairos_tools.subagent import delegate_tool
@@ -91,6 +92,7 @@ def build_tools(
     jobs: JobRepository | None = None,
     notify: Enqueue | None = None,
     memory: MemoryRepository | None = None,
+    flights: FlightProvider | None = None,
     clock: Clock | None = None,
 ) -> ToolRegistry:
     """The tool set, in a fixed order (the order is part of the cached prompt prefix).
@@ -105,6 +107,10 @@ def build_tools(
     else:
         log.warning("web_search_disabled", reason="TAVILY_API_KEY is not set")
     tools.register(web_fetch_tool(http))
+    if flights is None and settings.serpapi_api_key is not None:
+        flights = SerpApiFlights(settings.serpapi_api_key, http, clock=clock)
+    if flights is not None:
+        tools.register(flights_search_tool(flights))
     tools.register(record_observation_tool())
     if jobs is not None:
         for item in schedule_tools(jobs, clock, timezone=settings.timezone):
@@ -139,6 +145,7 @@ SUBAGENT_PROFILES = (
                 "current_time",
                 "web_search",
                 "web_fetch",
+                "flights_search",
                 "browser_navigate",
                 "browser_snapshot",
                 "browser_extract",

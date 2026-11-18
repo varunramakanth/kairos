@@ -21,7 +21,11 @@ Kairos is an always-on personal agent. `PLAN.md` is the source of truth for scop
 | `just gen-client` | Regenerate `apps/web/openapi.json` and the TS client after any API or event model change |
 | `just record-cassettes` | Rebuild the synthetic eval cassettes (free) |
 | `just record-live [case]` | Re-record live eval cases: real model and web calls. Costs money; ask first |
-| `just evals` | Eval suites (offline) |
+| `just evals` | Eval suites (offline), including the M5 suites held to `tests/evals/baseline.json` |
+| `just record-evals [suite] [--only ids] [--haiku]` | Re-record M5 eval cases live (agent, web, judge, simulator). Costs money, capped by `KAIROS_EVALS_MAX_USD`; ask first |
+| `just evals-baseline` | Replay the M5 suites and rewrite the regression baseline (review the diff) |
+| `just evals-report` | Replay, gate and publish M5 results to the local dashboard at `/evals` |
+| `just seed-evals` | Draft candidate cases with Sonnet for curation (a few cents; ask first) |
 | `just test-live` | Tests marked `live`, with `LIVE=1`. Costs money; ask first |
 | `just check` | Everything CI runs. Must be green before a milestone is done |
 
@@ -38,7 +42,8 @@ Kairos is an always-on personal agent. `PLAN.md` is the source of truth for scop
 - Python for everything except the web UI. TypeScript only in `apps/web`.
 - The UI talks to the backend only through the client generated from FastAPI's OpenAPI schema (`just gen-client`). No hand-written API types. Pydantic models are the single source of truth, including streaming events.
 - No LangChain. Claude Agent SDK, Strands and LangGraph appear only as comparison adapters in `kairos_evals`.
-- `kairos_evals` must not import any other `kairos_*` package (`tests/test_workspace.py` enforces this).
+- `kairos_evals` must not import any other `kairos_*` package (`tests/test_workspace.py` enforces this). The Kairos adapter lives in `tests/evals/kairos_adapter.py`.
+- Eval cases run with a fixed clock (`REFERENCE_NOW`, Wed 2026-11-18 14:00 Toronto) and seeded user jobs; a changed judge or simulator prompt is a `CassetteMiss` until re-recorded.
 
 ## Python
 

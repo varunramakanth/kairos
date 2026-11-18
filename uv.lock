@@ -1398,6 +1398,7 @@ dependencies = [
     { name = "kairos-harness" },
     { name = "kairos-scheduler" },
     { name = "kairos-worker" },
+    { name = "pyjwt", extra = ["crypto"] },
     { name = "uvicorn", extra = ["standard"] },
 ]
 
@@ -1410,6 +1411,7 @@ requires-dist = [
     { name = "kairos-harness", editable = "packages/kairos_harness" },
     { name = "kairos-scheduler", editable = "packages/kairos_scheduler" },
     { name = "kairos-worker", editable = "services/worker" },
+    { name = "pyjwt", extras = ["crypto"], specifier = ">=2.15,<3" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.54" },
 ]
 

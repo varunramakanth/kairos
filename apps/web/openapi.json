@@ -5,6 +5,28 @@
     "version": "0.2.0"
   },
   "paths": {
+    "/auth/config": {
+      "get": {
+        "tags": [
+          "meta"
+        ],
+        "summary": "Auth Config",
+        "description": "What the web app needs to sign in. Public: it contains no secrets.",
+        "operationId": "auth_config",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthConfig"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/health": {
       "get": {
         "tags": [
@@ -1870,6 +1892,53 @@
         ],
         "title": "AuditEntry",
         "description": "One thing that happened with a side effect, or a human decision."
+      },
+      "AuthConfig": {
+        "properties": {
+          "enabled": {
+            "type": "boolean",
+            "title": "Enabled"
+          },
+          "issuer": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Issuer"
+          },
+          "client_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Client Id"
+          },
+          "domain": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Domain"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "enabled"
+        ],
+        "title": "AuthConfig"
       },
       "Below": {
         "properties": {

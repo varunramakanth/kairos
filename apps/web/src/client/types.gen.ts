@@ -220,6 +220,28 @@ export type AuditEntry = {
 };
 
 /**
+ * AuthConfig
+ */
+export type AuthConfig = {
+    /**
+     * Enabled
+     */
+    enabled: boolean;
+    /**
+     * Issuer
+     */
+    issuer?: string | null;
+    /**
+     * Client Id
+     */
+    client_id?: string | null;
+    /**
+     * Domain
+     */
+    domain?: string | null;
+};
+
+/**
  * Below
  */
 export type Below = {
@@ -2094,6 +2116,22 @@ export type WatchSpec = {
      */
     cooldown_seconds?: number;
 };
+
+export type AuthConfigData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/auth/config';
+};
+
+export type AuthConfigResponses = {
+    /**
+     * Successful Response
+     */
+    200: AuthConfig;
+};
+
+export type AuthConfigResponse = AuthConfigResponses[keyof AuthConfigResponses];
 
 export type HealthData = {
     body?: never;

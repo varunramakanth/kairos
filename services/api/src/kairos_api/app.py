@@ -24,6 +24,7 @@ from fastapi.sse import EventSourceResponse, ServerSentEvent
 from pydantic import Field
 from sqlalchemy.ext.asyncio import AsyncEngine
 
+from kairos_api.auth import Authenticator, StripPrefix
 from kairos_api.limits import RateLimiter
 from kairos_api.settings import ApiSettings
 from kairos_api.streams import run_event_stream
@@ -120,6 +121,14 @@ class Decision(DomainModel):
     approve: bool
     note: str | None = Field(default=None, max_length=1000)
     """Shown to the model when declining (e.g. "send it tomorrow instead")."""
+
+
+class AuthConfig(DomainModel):
+    enabled: bool
+    issuer: str | None = None
+    client_id: str | None = None
+    domain: str | None = None
+    """Cognito Hosted UI base URL (sign-in and sign-out pages)."""
 
 
 MIN_LABELS = 10
@@ -253,17 +262,25 @@ def create_app(
                 stack.push_async_callback(stop_worker)
             yield
 
+    authenticator = (
+        Authenticator(issuer=settings.auth_issuer, client_id=settings.auth_client_id)
+        if settings.auth_issuer and settings.auth_client_id
+        else None
+    )
     app = FastAPI(
         title="Kairos API",
         version=API_VERSION,
         lifespan=lifespan,
         generate_unique_id_function=_operation_id,
+        dependencies=[Depends(authenticator)] if authenticator else [],
     )
+    if settings.path_prefix:
+        app.add_middleware(StripPrefix, prefix=settings.path_prefix)
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.cors_origins,
         allow_methods=["GET", "POST", "PATCH", "PUT", "DELETE"],
-        allow_headers=["Content-Type", "Last-Event-ID"],
+        allow_headers=["Content-Type", "Last-Event-ID", "Authorization"],
     )
 
     @app.exception_handler(NotFoundError)
@@ -298,6 +315,18 @@ def create_app(
             )
 
         return build
+
+    @app.get("/auth/config", tags=["meta"])
+    async def auth_config() -> AuthConfig:
+        """What the web app needs to sign in. Public: it contains no secrets."""
+        if authenticator is None or not settings.auth_domain:
+            return AuthConfig(enabled=False)
+        return AuthConfig(
+            enabled=True,
+            issuer=authenticator.issuer,
+            client_id=authenticator.client_id,
+            domain=settings.auth_domain.rstrip("/"),
+        )
 
     @app.get("/health", tags=["meta"])
     async def health() -> Health:

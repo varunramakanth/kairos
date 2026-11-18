@@ -5,6 +5,7 @@ description = "FastAPI service: REST and SSE streaming."
 requires-python = ">=3.12"
 dependencies = [
     "fastapi>=0.163,<1",
+    "pyjwt[crypto]>=2.15,<3",
     "kairos-db",
     "kairos-domain",
     "kairos-evals",

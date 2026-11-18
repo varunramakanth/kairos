@@ -345,6 +345,18 @@ Worth evaluating in an ADR: **Bedrock AgentCore** (Runtime, Memory, Gateway, Obs
 | **M8** | AWS prod | CDK stacks deployed to `dev` then `prod`, Cognito login, alarms, budgets, runbook; online evals sampling prod traces |
 | **M9** | Polish | PWA, ⌘K, mobile layout, onboarding, README with architecture diagrams, demo video script |
 
+### Deferred eval gaps (reviewed against the AWS article on 2026-11-18; revisit later)
+Built in M5 and conforming: the four-step workflow (offline), three metric layers, application-specific metrics, framework-agnostic traces, dashboard and CI gate. Still to do:
+- **Online traces:** sample production traces into the evaluator (M8).
+- **Alerting:** notify on a gate failure or a metric below its floor, through the notification outbox.
+- **Human audits:** a periodic review queue of trace subsets, which also calibrates the judge (M7).
+- **Missing metrics:** response relevance, conciseness, toxicity and harmfulness as judge criteria; goal accuracy; multi-turn function-calling (sequence) accuracy; a reasoning context score.
+- **Failure recovery:** a suite with injected tool failures (errors, malformed output, timeouts, auth failures), scored on coherent recovery.
+- **Tool schema quality:** whether tool definitions themselves cause wrong tool selection.
+- **Real latency:** keep live timings at record time, so model comparisons report true latency.
+- **Comparison adapter:** Bedrock AgentCore Evaluations.
+- **After M6 lands:** memory metrics (context retrieval precision and recall) and multi-agent metrics.
+
 ### Signature end-to-end scenarios (also used as eval cases)
 1. "Watch Toronto → Coimbatore round-trip fares for Dec 10–20, alert me under $X CAD, check every 6 hours" → watch created → observations stored → one alert on drop, no duplicates.
 2. "Every Monday 7am, email me the top 5 agentic-AI-in-banking stories with links" → weekly digest job → email arrives with valid citations.

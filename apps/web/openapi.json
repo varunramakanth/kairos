@@ -1098,6 +1098,114 @@
         }
       }
     },
+    "/evals/review": {
+      "get": {
+        "tags": [
+          "evals"
+        ],
+        "summary": "Review Queue",
+        "description": "Judge verdicts awaiting the owner's label (judge calibration).",
+        "operationId": "review_queue",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 50,
+              "minimum": 1,
+              "default": 10,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ReviewItem"
+                  },
+                  "title": "Response Review Queue"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "evals"
+        ],
+        "summary": "Label Verdict",
+        "operationId": "label_verdict",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReviewLabel"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/evals/calibration": {
+      "get": {
+        "tags": [
+          "evals"
+        ],
+        "summary": "Judge Calibration",
+        "description": "Judge-human agreement per criterion. A criterion is trusted only with enough\nlabels and a kappa of at least MIN_KAPPA.",
+        "operationId": "judge_calibration",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/CriterionCalibration"
+                  },
+                  "type": "array",
+                  "title": "Response Judge Calibration"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/evals/runs": {
       "get": {
         "tags": [
@@ -2075,6 +2183,48 @@
         ],
         "title": "ContextCompacted",
         "description": "The context grew too large and was replaced by a summary (a new epoch).\n\nThe previous epoch's messages are kept in full as ``archive_blob_id``."
+      },
+      "CriterionCalibration": {
+        "properties": {
+          "metric_id": {
+            "type": "string",
+            "title": "Metric Id"
+          },
+          "n": {
+            "type": "integer",
+            "title": "N"
+          },
+          "agreement": {
+            "type": "number",
+            "title": "Agreement"
+          },
+          "kappa": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Kappa"
+          },
+          "trusted": {
+            "type": "boolean",
+            "title": "Trusted"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "metric_id",
+          "n",
+          "agreement",
+          "kappa",
+          "trusted"
+        ],
+        "title": "CriterionCalibration",
+        "description": "How well the judge agrees with the owner on one criterion."
       },
       "CronSchedule": {
         "properties": {
@@ -3368,6 +3518,113 @@
           "channels"
         ],
         "title": "Queued"
+      },
+      "ReviewItem": {
+        "properties": {
+          "run_id": {
+            "type": "string",
+            "title": "Run Id"
+          },
+          "suite": {
+            "type": "string",
+            "title": "Suite"
+          },
+          "example_id": {
+            "type": "string",
+            "title": "Example Id"
+          },
+          "metric_id": {
+            "type": "string",
+            "title": "Metric Id"
+          },
+          "question": {
+            "type": "string",
+            "title": "Question"
+          },
+          "answer": {
+            "type": "string",
+            "title": "Answer"
+          },
+          "criterion": {
+            "type": "string",
+            "title": "Criterion"
+          },
+          "judge_passed": {
+            "type": "boolean",
+            "title": "Judge Passed"
+          },
+          "judge_score": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Judge Score"
+          },
+          "judge_reason": {
+            "type": "string",
+            "title": "Judge Reason"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "run_id",
+          "suite",
+          "example_id",
+          "metric_id",
+          "question",
+          "answer",
+          "criterion",
+          "judge_passed",
+          "judge_score",
+          "judge_reason"
+        ],
+        "title": "ReviewItem",
+        "description": "One judge verdict for a human to label. The judge's own verdict is included so\nthe UI can reveal it after the human has answered."
+      },
+      "ReviewLabel": {
+        "properties": {
+          "run_id": {
+            "type": "string",
+            "title": "Run Id"
+          },
+          "example_id": {
+            "type": "string",
+            "title": "Example Id"
+          },
+          "metric_id": {
+            "type": "string",
+            "title": "Metric Id"
+          },
+          "passed": {
+            "type": "boolean",
+            "title": "Passed"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "run_id",
+          "example_id",
+          "metric_id",
+          "passed"
+        ],
+        "title": "ReviewLabel"
       },
       "RunAccepted": {
         "properties": {

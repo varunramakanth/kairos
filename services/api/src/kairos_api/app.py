@@ -47,7 +47,13 @@ from kairos_db.governance import (
 from kairos_db.memories import MemoryStore
 from kairos_domain.base import DomainModel
 from kairos_domain.content import Message
-from kairos_domain.evals import EvalRunDetail, EvalRunSummary
+from kairos_domain.evals import (
+    CriterionCalibration,
+    EvalRunDetail,
+    EvalRunSummary,
+    ReviewItem,
+    ReviewLabel,
+)
 from kairos_domain.events import RunEvent
 from kairos_domain.governance import (
     Approval,
@@ -63,6 +69,9 @@ from kairos_domain.jobs import Job, JobDetail, JobKind, JobSpec, JobStatus, JobS
 from kairos_domain.memory import Memory, MemoryCreate, MemorySource, MemoryStatus, MemoryUpdate
 from kairos_domain.run import RunRequest
 from kairos_domain.threads import RunDetail, Thread, ThreadDetail
+from kairos_evals.judge import CRITERIA
+from kairos_evals.simulator import CONVERSATION_CRITERIA
+from kairos_evals.stats import cohens_kappa
 from kairos_harness import Provider, SystemClock
 from kairos_scheduler.timing import ScheduleError, next_fire, validate
 from kairos_worker.service import open_runtime, spend_cap, work
@@ -111,6 +120,17 @@ class Decision(DomainModel):
     approve: bool
     note: str | None = Field(default=None, max_length=1000)
     """Shown to the model when declining (e.g. "send it tomorrow instead")."""
+
+
+MIN_LABELS = 10
+MIN_KAPPA = 0.6
+JUDGE_QUESTIONS: dict[str, str] = {
+    **CRITERIA,
+    **CONVERSATION_CRITERIA,
+    "recovery": "After a tool failed, did the assistant recover sensibly or say plainly "
+    "what failed, without presenting results it did not get?",
+}
+"""The question each judge criterion answers, shown to the human reviewer."""
 
 
 class AppSettings(DomainModel):
@@ -541,6 +561,45 @@ def create_app(
         await services(request).audit.record(
             actor="user", action="memory.deleted", subject=memory_id
         )
+
+    @app.get("/evals/review", tags=["evals"])
+    async def review_queue(
+        request: Request, limit: Annotated[int, Query(ge=1, le=50)] = 10
+    ) -> list[ReviewItem]:
+        """Judge verdicts awaiting the owner's label (judge calibration)."""
+        items = await services(request).evals.review_queue(limit=limit)
+        return [
+            item.model_copy(
+                update={"criterion": JUDGE_QUESTIONS.get(item.metric_id, item.metric_id)}
+            )
+            for item in items
+        ]
+
+    @app.post("/evals/review", status_code=204, tags=["evals"])
+    async def label_verdict(request: Request, body: ReviewLabel) -> None:
+        if not await services(request).evals.label(body):
+            raise HTTPException(status_code=404, detail="no such judge verdict")
+
+    @app.get("/evals/calibration", tags=["evals"])
+    async def judge_calibration(request: Request) -> list[CriterionCalibration]:
+        """Judge-human agreement per criterion. A criterion is trusted only with enough
+        labels and a kappa of at least MIN_KAPPA."""
+        report: list[CriterionCalibration] = []
+        for metric_id, pairs in sorted((await services(request).evals.label_pairs()).items()):
+            judge, human = [j for j, _ in pairs], [h for _, h in pairs]
+            agreement = sum(j == h for j, h in pairs) / len(pairs)
+            informative = len(set(judge) | set(human)) > 1
+            kappa = cohens_kappa(judge, human) if informative else None
+            report.append(
+                CriterionCalibration(
+                    metric_id=metric_id,
+                    n=len(pairs),
+                    agreement=round(agreement, 3),
+                    kappa=round(kappa, 3) if kappa is not None else None,
+                    trusted=len(pairs) >= MIN_LABELS and kappa is not None and kappa >= MIN_KAPPA,
+                )
+            )
+        return report
 
     @app.get("/evals/runs", tags=["evals"])
     async def list_eval_runs(

@@ -42,6 +42,12 @@ export default function EvalsPage() {
           response, the agent&apos;s components, and the model. Trends show the
           metric across runs on the same model.
         </p>
+        <Link
+          href="/evals/review"
+          className="text-primary text-sm underline-offset-4 hover:underline"
+        >
+          Review the judge (calibration) →
+        </Link>
       </header>
       {error && <p className="text-destructive text-sm">{error}</p>}
       {runs && latest.length === 0 && (

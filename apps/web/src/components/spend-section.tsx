@@ -25,19 +25,16 @@ export function SpendSection({
           : " (no daily cap)"}
       </p>
       {cap !== null && (
-        <div
-          className="h-1.5 w-full rounded bg-muted"
-          role="meter"
+        <meter
+          className="h-2 w-full"
           aria-label="Share of the daily cap spent"
-          aria-valuemin={0}
-          aria-valuemax={cap}
-          aria-valuenow={spent}
+          min={0}
+          max={cap}
+          high={cap * 0.8}
+          value={Math.min(spent, cap)}
         >
-          <div
-            className={`h-1.5 rounded ${reached ? "bg-destructive" : "bg-primary"}`}
-            style={{ width: `${(share * 100).toFixed(1)}%` }}
-          />
-        </div>
+          {(share * 100).toFixed(0)}%
+        </meter>
       )}
       <p className="text-muted-foreground text-xs">
         {reached

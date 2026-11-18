@@ -88,9 +88,10 @@ suites := "tests.evals.suites:intent_tools tests.evals.suites:scheduling tests.e
 evals-baseline:
     uv run kairos-evals run {{ suites }} --harness tests.evals.kairos_adapter:replay --update-baseline tests/evals/baseline.json
 
-# Replay the M5 suites, gate them, and publish the results to the local dashboard (/evals)
+# Replay the suites, gate them, publish to the dashboard (/evals) and notify on a regression
 evals-report:
-    uv run kairos-evals run {{ suites }} --harness tests.evals.kairos_adapter:replay --gate tests/evals/baseline.json --out jsonl:.evals --out "postgres:$KAIROS_DATABASE_URL"
+    -uv run kairos-evals run {{ suites }} --harness tests.evals.kairos_adapter:replay --gate tests/evals/baseline.json --out jsonl:.evals --out "postgres:$KAIROS_DATABASE_URL"
+    uv run kairos evals-alert .evals/runs.jsonl
     uv run kairos-evals run tests.evals.suites:intent_tools_core tests.evals.suites:scheduling tests.evals.suites:safety_core --harness tests.evals.kairos_adapter:haiku --out jsonl:.evals --out "postgres:$KAIROS_DATABASE_URL"
 
 # Record the M5 eval suites live (real model, web, judge; costs money). Capped by KAIROS_EVALS_MAX_USD.

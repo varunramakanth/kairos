@@ -11,6 +11,7 @@ Put ``TracingHooks`` last in a ``HookChain``. The chain stops at the first hook 
 denies a tool call, so spans are only opened for calls that actually run.
 """
 
+import json
 import time
 from dataclasses import dataclass, field
 
@@ -128,8 +129,12 @@ class TracingHooks:
                 a.LANGFUSE_COST: state.cost_usd - spans.cost_usd,
             }
         )
-        if self._capture_content and completed.message.text:
-            span.set_attribute(a.OUTPUT_VALUE, completed.message.text)
+        if self._capture_content:
+            if completed.message.text:
+                span.set_attribute(a.OUTPUT_VALUE, completed.message.text)
+            if uses := completed.message.tool_uses:
+                requested = [{"id": u.id, "name": u.name, "arguments": u.input} for u in uses]
+                span.set_attribute(a.REQUESTED_TOOL_CALLS, json.dumps(requested))
         spans.cost_usd = state.cost_usd
         span.end()
         spans.model = None
@@ -156,6 +161,8 @@ class TracingHooks:
                     a.STEP: state.step,
                 },
             )
+            if self._capture_content:
+                span.set_attribute(a.TOOL_CALL_ARGUMENTS, json.dumps(call.input))
             spans.tools[call.id] = (span, started_ns)
         return Allow()
 

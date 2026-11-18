@@ -1,5 +1,6 @@
 """Spans produced by a real loop run, captured in memory."""
 
+import json
 from collections.abc import Sequence
 from pathlib import Path
 
@@ -10,7 +11,7 @@ from opentelemetry.trace import SpanKind, StatusCode
 
 from kairos_domain.content import Provenance
 from kairos_domain.run import RunRequest, RunState, ToolCallRecord
-from kairos_domain.tools import Deny, ToolContext, ToolDecision, ToolSpec
+from kairos_domain.tools import Allow, Deny, ToolContext, ToolDecision, ToolSpec
 from kairos_domain.usage import Usage
 from kairos_harness import AgentLoop, BaseHooks, HookChain, Hooks, InMemoryCheckpointer
 from kairos_harness.testing import (
@@ -204,6 +205,30 @@ async def test_denied_tools_get_no_span_and_content_is_off_by_default() -> None:
     assert root.attributes is not None
     assert root.attributes["input.value"] == "find fares"
     assert root.attributes["output.value"] == "secret answer"
+
+
+async def test_content_capture_records_requested_and_executed_tool_arguments() -> None:
+    class DenyBoom(BaseHooks):
+        async def before_tool(
+            self, state: RunState, call: ToolCallRecord, spec: ToolSpec
+        ) -> ToolDecision:
+            return Deny(reason="no") if call.name == "boom" else Allow()
+
+    turns = [
+        tool_turn(("t1", "web_search", {"query": "fares"}), ("t2", "boom", {"x": 1})),
+        text_turn("done"),
+    ]
+    spans = await traced_run(turns, extra_hooks=[DenyBoom()], capture_content=True)
+    first_chat = next(s for s in spans if s.name.startswith("chat") and s.attributes)
+    assert first_chat.attributes is not None
+    # Evals see what the model asked for, including the call policy then blocked.
+    assert json.loads(str(first_chat.attributes["kairos.requested_tool_calls"])) == [
+        {"id": "t1", "name": "web_search", "arguments": {"query": "fares"}},
+        {"id": "t2", "name": "boom", "arguments": {"x": 1}},
+    ]
+    executed = by_name(spans)["execute_tool web_search"]
+    assert executed.attributes is not None
+    assert json.loads(str(executed.attributes["gen_ai.tool.call.arguments"])) == {"query": "fares"}
 
 
 async def test_otlp_json_export_uses_hex_ids(tmp_path: Path) -> None:

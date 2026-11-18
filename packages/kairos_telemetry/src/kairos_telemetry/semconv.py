@@ -25,6 +25,7 @@ USAGE_CACHE_CREATION = "gen_ai.usage.cache_creation.input_tokens"
 TOOL_NAME = "gen_ai.tool.name"
 TOOL_CALL_ID = "gen_ai.tool.call.id"
 TOOL_TYPE = "gen_ai.tool.type"
+TOOL_CALL_ARGUMENTS = "gen_ai.tool.call.arguments"  # opt-in content
 ERROR_TYPE = "error.type"
 
 OP_INVOKE_AGENT = "invoke_agent"
@@ -45,6 +46,9 @@ TOOL_CALLS = "kairos.tool_calls"
 TOOL_RISK = "kairos.tool.risk"
 TOOL_PROVENANCE = "kairos.tool.provenance"
 TOOL_IS_ERROR = "kairos.tool.is_error"
+REQUESTED_TOOL_CALLS = "kairos.requested_tool_calls"
+"""On a chat span: JSON list of ``{id, name, arguments}`` the model asked for, whether
+or not policy then let them run (content capture only)."""
 
 # --- read by Langfuse's OTLP ingestion ------------------------------------------------
 LANGFUSE_SESSION_ID = "langfuse.session.id"

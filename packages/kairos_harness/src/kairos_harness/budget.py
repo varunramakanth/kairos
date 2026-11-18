@@ -56,6 +56,11 @@ class PriceTable:
         return price.cost(usage) if price else 0.0
 
 
+class BudgetStop(Exception):  # a stop signal, not an error
+    """Raised by a hook (e.g. a daily spend cap) to end the run as ``budget_exceeded``.
+    The message is shown to the user."""
+
+
 def exceeded(budget: Budget, state: RunState, *, next_tool_calls: int = 0) -> str | None:
     """Return a description of the first cap the run has hit, or ``None``.
 

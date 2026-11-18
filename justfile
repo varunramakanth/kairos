@@ -11,6 +11,7 @@ default:
 # Install Python and web dependencies
 sync:
     uv sync --all-packages --all-extras
+    uv run playwright install chromium
     # macOS can flag files in iCloud-synced folders as hidden, and Python 3.13 skips
     # hidden .pth files, which breaks editable installs (see CLAUDE.md).
     @if [ "$(uname)" = "Darwin" ]; then chflags -R nohidden .venv; fi
@@ -81,15 +82,16 @@ record-cassettes:
 record-live *cases:
     LIVE=1 uv run python -m tests.evals.record_live {{ cases }}
 
-suites := "tests.evals.suites:intent_tools tests.evals.suites:scheduling tests.evals.suites:safety tests.evals.suites:conversations"
+suites := "tests.evals.suites:intent_tools tests.evals.suites:scheduling tests.evals.suites:safety tests.evals.suites:conversations tests.evals.suites:browser tests.evals.suites:m6 tests.evals.suites:injection tests.evals.suites:failures"
 
 # Replay the M5 suites and write their summary as the new regression baseline
 evals-baseline:
     uv run kairos-evals run {{ suites }} --harness tests.evals.kairos_adapter:replay --update-baseline tests/evals/baseline.json
 
-# Replay the M5 suites, gate them, and publish the results to the local dashboard (/evals)
+# Replay the suites, gate them, publish to the dashboard (/evals) and notify on a regression
 evals-report:
-    uv run kairos-evals run {{ suites }} --harness tests.evals.kairos_adapter:replay --gate tests/evals/baseline.json --out jsonl:.evals --out "postgres:$KAIROS_DATABASE_URL"
+    -uv run kairos-evals run {{ suites }} --harness tests.evals.kairos_adapter:replay --gate tests/evals/baseline.json --out jsonl:.evals --out "postgres:$KAIROS_DATABASE_URL"
+    uv run kairos evals-alert .evals/runs.jsonl
     uv run kairos-evals run tests.evals.suites:intent_tools_core tests.evals.suites:scheduling tests.evals.suites:safety_core --harness tests.evals.kairos_adapter:haiku --out jsonl:.evals --out "postgres:$KAIROS_DATABASE_URL"
 
 # Record the M5 eval suites live (real model, web, judge; costs money). Capped by KAIROS_EVALS_MAX_USD.
@@ -99,6 +101,14 @@ record-evals *args:
 # Draft candidate golden cases with Sonnet for curation (costs a few cents). Optional categories.
 seed-evals *categories:
     LIVE=1 uv run python -m tests.evals.seed_cases {{ categories }}
+
+# Back up the database now to ~/Backups/kairos (the worker also does it nightly)
+backup:
+    uv run kairos backup
+
+# Restore a backup over the current database (stop the API and worker first)
+restore dump:
+    uv run kairos restore {{ dump }}
 
 # Apply database migrations to the local Postgres
 migrate:
@@ -112,6 +122,22 @@ worker:
 gen-client:
     uv run python -m kairos_api.openapi apps/web/openapi.json
     pnpm --dir apps/web gen-client
+
+# AWS (M8, docs/runbook.md). Settings come from infra/cdk/cdk.context.json or -c flags.
+# The AWS keys in .env (SES only) are dropped so only the named admin profile is used.
+cdk_cli := "env -u AWS_ACCESS_KEY_ID -u AWS_SECRET_ACCESS_KEY -u AWS_SESSION_TOKEN npx -y aws-cdk@2.1148.1"
+
+# Synthesize the CloudFormation template (no changes in AWS)
+synth profile *args:
+    cd infra/cdk && {{ cdk_cli }} synth --profile {{ profile }} {{ args }}
+
+# Show what a deploy would change
+cdk-diff profile *args:
+    cd infra/cdk && {{ cdk_cli }} diff --profile {{ profile }} {{ args }}
+
+# Deploy the production stack. Creates billable AWS resources; see the runbook first
+deploy profile *args:
+    cd infra/cdk && {{ cdk_cli }} deploy --profile {{ profile }} --require-approval broadening {{ args }}
 
 # Everything CI runs
 check: lint typecheck test evals

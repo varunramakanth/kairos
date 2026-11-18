@@ -1,0 +1,15 @@
+.git
+.venv
+.evals
+**/__pycache__
+**/.pytest_cache
+**/.ruff_cache
+**/node_modules
+**/.next
+apps/web/test-results
+tests
+infra/cdk/cdk.out
+.env
+.env.*
+*.dump
+.claude

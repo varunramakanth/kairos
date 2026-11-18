@@ -1,0 +1,13 @@
+[project]
+name = "kairos-infra"
+version = "0.1.0"
+description = "AWS CDK app for Kairos (lean production stack, ADR-017)."
+requires-python = ">=3.12"
+dependencies = [
+    "aws-cdk-lib==2.277.0",
+    "constructs>=10.8,<11",
+]
+
+[build-system]
+requires = ["uv_build>=0.9,<0.13"]
+build-backend = "uv_build"

@@ -150,7 +150,7 @@ This is where the codebase earns its "state of the art" label. It should be a cl
 |---|---|
 | `web_search` | Tavily (ADR-008); behind one tool name so the provider can change. Return sources with URLs |
 | `web_fetch` | Main-text extraction (trafilatura) to Markdown with links; refuses non-public addresses on every redirect hop (ADR-008). Robots and caching later |
-| `browser.*` | Navigate, read, screenshot, extract, via the `services/browser` service; "take control" view in the UI later |
+| `browser_*` | navigate, snapshot, extract, click (links only) and search (search boxes only) are read; type and press need approval. Our own Playwright MCP server in `services/browser`, reached through the MCP client (ADR-012). No screenshots (tool results are text) |
 | `email.send` / `email.draft` | Gmail API (OAuth) or SES. **Policy:** sending to self is auto; sending to anyone else needs approval |
 | `email.search` / `email.read` | Gmail read-only scope first |
 | `calendar.*` | Google Calendar; creating or updating events needs approval |
@@ -159,7 +159,7 @@ This is where the codebase earns its "state of the art" label. It should be a cl
 | `memory.*` | remember / recall / forget |
 | `schedule.*` | create / list / update / pause / delete jobs and watches |
 | `notify.*` | email / push to me |
-| `mcp.*` | Generic MCP client so any MCP server can be plugged in |
+| MCP servers | Generic MCP client (`KAIROS_MCP_SERVERS`): tools are prefixed, need approval and are untrusted unless configured otherwise; server annotations are ignored (ADR-012) |
 
 All tools share one schema format (Pydantic model → JSON Schema), registered with a `@tool` decorator. Each tool declares a **risk level** (`read`, `write_self`, `write_external`, `financial`), whether it is **idempotent**, and the **provenance** of what it returns (`trusted` or `untrusted`).
 
@@ -175,7 +175,7 @@ All tools share one schema format (Pydantic model → JSON Schema), registered w
 
 - Types: **profile facts**, **preferences**, **episodic** (what happened in past runs), **goal/task state**.
 - Postgres + **pgvector** for semantic recall; hybrid retrieval (BM25 + vector) and recency weighting.
-- Memory writes are explicit tool calls or an after-run "reflection" hook, and I can see, edit and delete them in the UI.
+- Memory writes are explicit tool calls or an after-run "reflection" hook, and I can see, edit and delete them in the UI. The agent only *proposes*; a memory is recalled once I confirm it (defence against memory poisoning, ADR-013). Keyword recall (Postgres full text, recency-weighted) is built; vector recall waits on the embedding choice.
 - Eval hook: log retrieved memories per turn so context-retrieval precision and recall can be measured.
 
 ### 3.6 UI (`apps/web`)
@@ -324,7 +324,7 @@ Worth evaluating in an ADR: **Bedrock AgentCore** (Runtime, Memory, Gateway, Obs
 1. Create the AWS account; enable MFA on root and lock root away.
 2. Set up IAM Identity Center with an admin user for daily use.
 3. Create an AWS Budget with email alerts (start with a low monthly threshold).
-4. Enable Bedrock model access for the Claude models in the chosen region. As of 2026-11 the current Claude models have no in-region inference in either `us-east-1` or `ca-central-1`; both use cross-region inference profiles. Tentative choice: `ca-central-1` for data at rest with a cross-region profile, to be confirmed with `aws bedrock list-inference-profiles` and recorded as ADR-006 at M8.
+4. Enable Bedrock model access for the Claude models in the chosen region. As of 2026-11 the current Claude models have no in-region inference in either `us-east-1` or `ca-central-1`; both use cross-region inference profiles. Decided at M8 (ADR-006): `ca-central-1` for everything at rest, with models through the Anthropic API, so no inference profile is needed.
 5. Verify a domain in SES and request production access.
 6. Run `cdk bootstrap` and set up the GitHub OIDC role.
 
@@ -340,18 +340,16 @@ Worth evaluating in an ADR: **Bedrock AgentCore** (Runtime, Memory, Gateway, Obs
 | **M3** | Scheduler + watches | Cron/interval/one-shot/watch with leases, DST-safe; NL → job creation with confirmation; Tasks UI with history + value sparkline; fake-clock tests. *Built 2026-11-17 (ADR-009); alerts are stored and shown, delivery is M4.* |
 | **M4** | Notify + email + approvals | Email to self (SES/Gmail), web push, policy engine, approval inbox, audit log. Weekly-digest job works end to end. *Decided 2026-11-17 by the owner: email to self via Amazon SES with a send-only IAM policy (revised from a Gmail app password, ADR-010); self-hosted Web Push (VAPID); strict approvals, meaning every agent action with a side effect waits for approval, including email to self and job changes, while system notifications (alerts, digest) are delivered without one; weekly digest Sunday 18:00 America/Toronto. Built 2026-11-17 (ADR-010).* |
 | **M5** | Eval framework v1 | `kairos-evals` with workflow, 3-layer metrics, golden datasets (≥50 cases for intent/tool/scheduling), simulator, S3 + dashboard, CI regression gate. *Decided 2026-11-18 by the owner: datasets LLM-seeded then curated; Sonnet 5.5 as judge; results in Postgres + JSONL now, with the S3 Parquet sink built and tested offline and pointed at a bucket in M8; live spend up to ~$3. Built 2026-11-18 (ADR-011): own metric library (Ragas requires LangChain; DeepEval pulls in analytics and pytest at runtime), 73 curated cases, cached judge and simulator, baseline gate with 1.0 floors on approval gates and injection resistance, Haiku 5.5 comparison for layer 3.* |
-| **M6** | Memory + subagents + browser | pgvector memory with UI, reflection hook, subagents, Playwright browser service, flight + deal adapters; flight-watch scenario passes end to end |
-| **M7** | Hardening | Prompt-injection suite passing, judge calibration, kill switch, rate limits, backups, threat model doc |
-| **M8** | AWS prod | CDK stacks deployed to `dev` then `prod`, Cognito login, alarms, budgets, runbook; online evals sampling prod traces |
+| **M6** | Memory + subagents + browser | pgvector memory with UI, reflection hook, subagents, Playwright browser service, flight + deal adapters; flight-watch scenario passes end to end *Decided 2026-11-18 by the owner: flights via SerpApi's free tier, behind a `FlightProvider` interface; deals by search plus page reading and page watches; local embeddings (bge-small, fastembed); M6 live spend up to ~$2. Built 2026-11-18: the generic MCP client and an isolated Playwright browser (ADR-012); read-only subagents and memory the user confirms (ADR-013); flights, deals and hybrid semantic recall (ADR-014). The fare-watch scenario passes end to end. Recorded live for $0.23: the browser and M6 eval suites, including a real flight search (YYZ-LIS, 721 CAD cheapest). M6 complete.* |
+| **M7** | Hardening | Prompt-injection suite passing, judge calibration, kill switch, rate limits, backups, threat model doc. *Decided 2026-11-18 by the owner: injection screening is cheap patterns on every untrusted result, with Haiku 5.5 deciding only the suspicious ones; a $5 daily spend cap; nightly local backups to ~/Backups/kairos kept 14 days (AWS snapshots in M8); live spend up to ~$2. Built 2026-11-18: a threat model; injection screening; a daily spend cap and rate limits; backups with a tested restore; a pinning proxy that closes browser DNS rebinding (ADR-015); injection and failure-recovery suites, three new judge criteria, a blind review queue with Cohen's kappa calibration, and eval-regression alerts (ADR-016). Live spend $1.04. Injection resistance 1.0 across all 21 injection cases. Remaining for the owner: label about 30 judge verdicts on /evals/review to calibrate the judge.* |
+| **M8** | AWS prod | CDK stacks deployed to `dev` then `prod`, Cognito login, alarms, budgets, runbook; online evals sampling prod traces *Decided 2026-11-18 by the owner: the lean architecture (Fargate, RDS Postgres t4g.micro with pgvector, ALB behind CloudFront, public subnets and no NAT); `prod` only to start; models through the Anthropic API with the key in Secrets Manager; the CloudFront default address, so no domain. Login is therefore in the app (Cognito Hosted UI with PKCE, JWTs checked by the API), because an ALB cannot use HTTPS without a domain certificate. Nothing is deployed until the owner approves a cost estimate and provides admin access. Built 2026-11-18 (ADR-006, ADR-017, runbook): Cognito sign-in in the web app and token checks in the API; container images; a CDK stack with offline assertion tests; online evals over every production run. Priced against the ca-central-1 price lists, the first layout came to ~$81/month; with the owner's approval it became one ARM64 task with an internal ALB behind a CloudFront VPC origin, ~$57/month. A sampled LLM judge on production runs and the S3 Parquet eval sink are deferred. Remaining: the owner sets up admin access and approves the first deploy.* |
 | **M9** | Polish | PWA, ⌘K, mobile layout, onboarding, README with architecture diagrams, demo video script |
 
 ### Deferred eval gaps (reviewed against the AWS article on 2026-11-18; revisit later)
 Built in M5 and conforming: the four-step workflow (offline), three metric layers, application-specific metrics, framework-agnostic traces, dashboard and CI gate. Still to do:
 - **Online traces:** sample production traces into the evaluator (M8).
-- **Alerting:** notify on a gate failure or a metric below its floor, through the notification outbox.
-- **Human audits:** a periodic review queue of trace subsets, which also calibrates the judge (M7).
-- **Missing metrics:** response relevance, conciseness, toxicity and harmfulness as judge criteria; goal accuracy; multi-turn function-calling (sequence) accuracy; a reasoning context score.
-- **Failure recovery:** a suite with injected tool failures (errors, malformed output, timeouts, auth failures), scored on coherent recovery.
+- ~~**Alerting**~~, ~~**Human audits / judge calibration**~~, ~~**Failure recovery**~~, ~~**relevance, conciseness, harmlessness**~~: done in M7 (ADR-016).
+- **Missing metrics:** goal accuracy; multi-turn function-calling (sequence) accuracy; a reasoning context score.
 - **Tool schema quality:** whether tool definitions themselves cause wrong tool selection.
 - **Real latency:** keep live timings at record time, so model comparisons report true latency.
 - **Comparison adapter:** Bedrock AgentCore Evaluations.

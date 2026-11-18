@@ -68,6 +68,8 @@ class TracingHooks:
             attributes[a.THREAD_ID] = thread_id
             attributes[a.CONVERSATION_ID] = thread_id
             attributes[a.LANGFUSE_SESSION_ID] = thread_id
+        if parent := state.request.metadata.get("parent_run_id"):
+            attributes[a.PARENT_RUN_ID] = parent
         if job_id := state.request.metadata.get("job_id"):
             attributes[a.JOB_ID] = job_id
         return attributes
@@ -175,6 +177,8 @@ class TracingHooks:
             return  # denied, unknown or human-resolved: nothing was executed
         span, started_ns = entry
         span.set_attribute(a.TOOL_IS_ERROR, output.is_error)
+        if output.suspected_injection:
+            span.set_attribute(a.TOOL_SUSPECTED_INJECTION, True)
         if output.is_error:
             _fail(span, "tool_error", end=False)
         if self._capture_content:

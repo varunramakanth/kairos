@@ -32,7 +32,7 @@ Kairos is an always-on personal agent. `PLAN.md` is the source of truth for scop
 ## Layout
 
 - `packages/kairos_*` — Python libraries (uv workspace members, `src/` layout, each with `py.typed`).
-- `services/{api,worker,browser}` — Python entrypoints (`kairos_api`, `kairos_worker`, `kairos_browser`).
+- `services/{api,worker,browser}` — Python entrypoints (`kairos_api`, `kairos_worker`, `kairos_browser`). The browser is an MCP server the worker starts over stdio (ADR-012).
 - `apps/web` — Next.js UI. The only TypeScript in the repo. `src/client` is generated; never edit it.
 - `infra/` — `compose.yaml` for local dev; CDK (Python) arrives in M8.
 - `tests/` — cross-package and integration tests. Unit tests live in each member's `tests/`.

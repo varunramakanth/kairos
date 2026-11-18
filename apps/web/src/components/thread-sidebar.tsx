@@ -1,9 +1,11 @@
 "use client";
 
 import {
+  Brain,
   CalendarClock,
   FlaskConical,
   Inbox,
+  LogOut,
   MessageSquare,
   Plus,
   ScrollText,
@@ -16,6 +18,7 @@ import { getSettings, listApprovals, listThreads } from "@/client/sdk.gen";
 import type { Thread } from "@/client/types.gen";
 import { APPROVALS_CHANGED } from "@/components/approval-card";
 import { THREADS_CHANGED } from "@/lib/api";
+import { authEnabled, signOut } from "@/lib/auth";
 import { cn } from "@/lib/utils";
 
 export function ThreadSidebar() {
@@ -90,6 +93,16 @@ export function ThreadSidebar() {
           Tasks &amp; watches
         </Link>
         <Link
+          href="/memory"
+          className={cn(
+            "flex items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-muted",
+            pathname.startsWith("/memory") && "bg-muted font-medium",
+          )}
+        >
+          <Brain className="size-3.5 text-muted-foreground" />
+          Memory
+        </Link>
+        <Link
           href="/evals"
           className={cn(
             "flex items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-muted",
@@ -149,6 +162,16 @@ export function ThreadSidebar() {
           );
         })}
       </nav>
+      {authEnabled() && (
+        <button
+          type="button"
+          onClick={() => void signOut()}
+          className="flex items-center gap-2 border-t px-4 py-2 text-muted-foreground text-xs hover:bg-muted"
+        >
+          <LogOut className="size-3.5" />
+          Sign out
+        </button>
+      )}
     </aside>
   );
 }

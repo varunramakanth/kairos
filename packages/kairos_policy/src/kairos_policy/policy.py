@@ -22,7 +22,8 @@ from kairos_domain.run import RunState, ToolCallRecord
 from kairos_domain.tools import Allow, Deny, RequireApproval, ToolDecision, ToolRisk, ToolSpec
 from kairos_harness import BaseHooks
 
-PROPOSAL_TOOLS = frozenset({"schedule_create"})
+PROPOSAL_TOOLS = frozenset({"schedule_create", "memory_remember"})
+"""Tools that only propose something the user must confirm before it takes effect."""
 
 
 @dataclass(frozen=True)

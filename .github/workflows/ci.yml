@@ -28,9 +28,12 @@ jobs:
       - run: uv run ruff format --check .
       - run: uv run ruff check .
       - run: uv run pyright
+      - name: Chromium for the browser service tests
+        run: uv run playwright install --with-deps chromium
       - name: Tests (offline; integration tests use Docker via testcontainers)
         env:
           KAIROS_REQUIRE_DOCKER: "1"
+          KAIROS_REQUIRE_BROWSER: "1"
         run: uv run pytest -m "not evals"
       - name: Eval suites (offline, cassette-backed)
         run: uv run pytest -m evals

@@ -132,6 +132,8 @@ class ToolCallResult(DurableEvent):
     blob_id: str | None = None
     """Handle to the full output when ``truncated`` is true."""
     duration_ms: int
+    suspected_injection: bool = False
+    """Screening found instructions aimed at the agent in this (untrusted) output."""
 
 
 class ToolCallUncertain(DurableEvent):

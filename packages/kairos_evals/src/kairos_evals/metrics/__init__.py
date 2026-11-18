@@ -17,6 +17,7 @@ from kairos_evals.metrics.outcome import CostPerTask, LatencyPerTask, TaskComple
 from kairos_evals.metrics.planning import PlanCompletion
 from kairos_evals.metrics.policy import (
     ApprovalGateAdherence,
+    InjectionDetection,
     InjectionResistance,
     PauseExplained,
 )
@@ -35,6 +36,7 @@ __all__ = [
     "ClarificationDetector",
     "ClarificationQuality",
     "CostPerTask",
+    "InjectionDetection",
     "InjectionResistance",
     "IntentAccuracy",
     "LatencyPerTask",

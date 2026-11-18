@@ -78,6 +78,14 @@ export type AppSettings = {
      * Timezone
      */
     timezone: string;
+    /**
+     * Spent Today Usd
+     */
+    spent_today_usd: number;
+    /**
+     * Daily Spend Cap Usd
+     */
+    daily_spend_cap_usd: number | null;
 };
 
 /**
@@ -209,6 +217,28 @@ export type AuditEntry = {
     detail: {
         [key: string]: JsonValue;
     };
+};
+
+/**
+ * AuthConfig
+ */
+export type AuthConfig = {
+    /**
+     * Enabled
+     */
+    enabled: boolean;
+    /**
+     * Issuer
+     */
+    issuer?: string | null;
+    /**
+     * Client Id
+     */
+    client_id?: string | null;
+    /**
+     * Domain
+     */
+    domain?: string | null;
 };
 
 /**
@@ -423,6 +453,34 @@ export type ContextCompacted = {
      * Cost Usd
      */
     cost_usd: number;
+};
+
+/**
+ * CriterionCalibration
+ *
+ * How well the judge agrees with the owner on one criterion.
+ */
+export type CriterionCalibration = {
+    /**
+     * Metric Id
+     */
+    metric_id: string;
+    /**
+     * N
+     */
+    n: number;
+    /**
+     * Agreement
+     */
+    agreement: number;
+    /**
+     * Kappa
+     */
+    kappa: number | null;
+    /**
+     * Trusted
+     */
+    trusted: boolean;
 };
 
 /**
@@ -828,6 +886,77 @@ export type KillSwitch = {
 };
 
 /**
+ * Memory
+ */
+export type Memory = {
+    /**
+     * Id
+     */
+    id: string;
+    kind: MemoryKind;
+    /**
+     * Content
+     */
+    content: string;
+    status: MemoryStatus;
+    source: MemorySource;
+    /**
+     * Run Id
+     */
+    run_id: string | null;
+    /**
+     * Created At
+     */
+    created_at: string;
+    /**
+     * Updated At
+     */
+    updated_at: string;
+};
+
+/**
+ * MemoryCreate
+ *
+ * A memory written by the user in the UI: active at once.
+ */
+export type MemoryCreate = {
+    kind?: MemoryKind;
+    /**
+     * Content
+     */
+    content: string;
+};
+
+/**
+ * MemoryKind
+ */
+export type MemoryKind = 'profile' | 'preference' | 'episodic' | 'task';
+
+/**
+ * MemorySource
+ */
+export type MemorySource = 'user' | 'agent' | 'reflection';
+
+/**
+ * MemoryStatus
+ */
+export type MemoryStatus = 'proposed' | 'active';
+
+/**
+ * MemoryUpdate
+ *
+ * Edit, re-classify or confirm a memory. Unset fields stay as they are.
+ */
+export type MemoryUpdate = {
+    kind?: MemoryKind | null;
+    /**
+     * Content
+     */
+    content?: string | null;
+    status?: MemoryStatus | null;
+};
+
+/**
  * Message
  */
 export type Message = {
@@ -1092,6 +1221,81 @@ export type Queued = {
      * Channels
      */
     channels: Array<ChannelName>;
+};
+
+/**
+ * ReviewItem
+ *
+ * One judge verdict for a human to label. The judge's own verdict is included so
+ * the UI can reveal it after the human has answered.
+ */
+export type ReviewItem = {
+    /**
+     * Run Id
+     */
+    run_id: string;
+    /**
+     * Suite
+     */
+    suite: string;
+    /**
+     * Example Id
+     */
+    example_id: string;
+    /**
+     * Metric Id
+     */
+    metric_id: string;
+    /**
+     * Question
+     */
+    question: string;
+    /**
+     * Answer
+     */
+    answer: string;
+    /**
+     * Criterion
+     */
+    criterion: string;
+    /**
+     * Judge Passed
+     */
+    judge_passed: boolean;
+    /**
+     * Judge Score
+     */
+    judge_score: number | null;
+    /**
+     * Judge Reason
+     */
+    judge_reason: string;
+};
+
+/**
+ * ReviewLabel
+ */
+export type ReviewLabel = {
+    /**
+     * Run Id
+     */
+    run_id: string;
+    /**
+     * Example Id
+     */
+    example_id: string;
+    /**
+     * Metric Id
+     */
+    metric_id: string;
+    /**
+     * Passed
+     */
+    passed: boolean;
+    /**
+     * Note
+     */
+    note?: string | null;
 };
 
 /**
@@ -1694,6 +1898,10 @@ export type ToolCallResult = {
      * Duration Ms
      */
     duration_ms: number;
+    /**
+     * Suspected Injection
+     */
+    suspected_injection?: boolean;
 };
 
 /**
@@ -1908,6 +2116,22 @@ export type WatchSpec = {
      */
     cooldown_seconds?: number;
 };
+
+export type AuthConfigData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/auth/config';
+};
+
+export type AuthConfigResponses = {
+    /**
+     * Successful Response
+     */
+    200: AuthConfig;
+};
+
+export type AuthConfigResponse = AuthConfigResponses[keyof AuthConfigResponses];
 
 export type HealthData = {
     body?: never;
@@ -2467,6 +2691,206 @@ export type ListAuditResponses = {
 };
 
 export type ListAuditResponse = ListAuditResponses[keyof ListAuditResponses];
+
+export type ListMemoriesData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Status
+         */
+        status?: MemoryStatus | null;
+        /**
+         * Q
+         */
+        q?: string | null;
+        /**
+         * Limit
+         */
+        limit?: number;
+    };
+    url: '/memories';
+};
+
+export type ListMemoriesErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type ListMemoriesError = ListMemoriesErrors[keyof ListMemoriesErrors];
+
+export type ListMemoriesResponses = {
+    /**
+     * Response List Memories
+     *
+     * Successful Response
+     */
+    200: Array<Memory>;
+};
+
+export type ListMemoriesResponse = ListMemoriesResponses[keyof ListMemoriesResponses];
+
+export type CreateMemoryData = {
+    body: MemoryCreate;
+    path?: never;
+    query?: never;
+    url: '/memories';
+};
+
+export type CreateMemoryErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type CreateMemoryError = CreateMemoryErrors[keyof CreateMemoryErrors];
+
+export type CreateMemoryResponses = {
+    /**
+     * Successful Response
+     */
+    201: Memory;
+};
+
+export type CreateMemoryResponse = CreateMemoryResponses[keyof CreateMemoryResponses];
+
+export type DeleteMemoryData = {
+    body?: never;
+    path: {
+        /**
+         * Memory Id
+         */
+        memory_id: string;
+    };
+    query?: never;
+    url: '/memories/{memory_id}';
+};
+
+export type DeleteMemoryErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type DeleteMemoryError = DeleteMemoryErrors[keyof DeleteMemoryErrors];
+
+export type DeleteMemoryResponses = {
+    /**
+     * Successful Response
+     */
+    204: void;
+};
+
+export type DeleteMemoryResponse = DeleteMemoryResponses[keyof DeleteMemoryResponses];
+
+export type UpdateMemoryData = {
+    body: MemoryUpdate;
+    path: {
+        /**
+         * Memory Id
+         */
+        memory_id: string;
+    };
+    query?: never;
+    url: '/memories/{memory_id}';
+};
+
+export type UpdateMemoryErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type UpdateMemoryError = UpdateMemoryErrors[keyof UpdateMemoryErrors];
+
+export type UpdateMemoryResponses = {
+    /**
+     * Successful Response
+     */
+    200: Memory;
+};
+
+export type UpdateMemoryResponse = UpdateMemoryResponses[keyof UpdateMemoryResponses];
+
+export type ReviewQueueData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Limit
+         */
+        limit?: number;
+    };
+    url: '/evals/review';
+};
+
+export type ReviewQueueErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type ReviewQueueError = ReviewQueueErrors[keyof ReviewQueueErrors];
+
+export type ReviewQueueResponses = {
+    /**
+     * Response Review Queue
+     *
+     * Successful Response
+     */
+    200: Array<ReviewItem>;
+};
+
+export type ReviewQueueResponse = ReviewQueueResponses[keyof ReviewQueueResponses];
+
+export type LabelVerdictData = {
+    body: ReviewLabel;
+    path?: never;
+    query?: never;
+    url: '/evals/review';
+};
+
+export type LabelVerdictErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type LabelVerdictError = LabelVerdictErrors[keyof LabelVerdictErrors];
+
+export type LabelVerdictResponses = {
+    /**
+     * Successful Response
+     */
+    204: void;
+};
+
+export type LabelVerdictResponse = LabelVerdictResponses[keyof LabelVerdictResponses];
+
+export type JudgeCalibrationData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/evals/calibration';
+};
+
+export type JudgeCalibrationResponses = {
+    /**
+     * Response Judge Calibration
+     *
+     * Successful Response
+     */
+    200: Array<CriterionCalibration>;
+};
+
+export type JudgeCalibrationResponse = JudgeCalibrationResponses[keyof JudgeCalibrationResponses];
 
 export type ListEvalRunsData = {
     body?: never;

@@ -36,6 +36,17 @@ class ToolOutput(DomainModel):
 
     content: str
     is_error: bool = False
+    suspected_injection: bool = False
+    """Set by the loop after screening untrusted output (never by tools themselves)."""
+
+
+class ScreenVerdict(DomainModel):
+    """The result of screening untrusted content for prompt injection."""
+
+    content: str
+    """The content to show the model: hidden characters removed, otherwise unchanged."""
+    suspected: bool = False
+    reasons: tuple[str, ...] = ()
 
 
 class ToolContext(DomainModel):

@@ -2,18 +2,23 @@
 
 import asyncio
 from collections.abc import AsyncGenerator
-from contextlib import asynccontextmanager
+from contextlib import AsyncExitStack, asynccontextmanager
 from importlib.metadata import version
 
 import structlog
-from opentelemetry.sdk.trace import TracerProvider
+from opentelemetry.sdk.trace import SpanProcessor, TracerProvider
+from opentelemetry.sdk.trace.export import SimpleSpanProcessor
 from sqlalchemy.ext.asyncio import AsyncEngine
 
 from kairos_db import EventPublisher, JobStore, Lease, RunQueue
 from kairos_db.governance import ApprovalStore, AuditStore, NotificationStore, SettingsStore
+from kairos_db.memories import MemoryStore
+from kairos_db.spend import SpendLedger
 from kairos_domain.governance import ApprovalStatus
 from kairos_domain.jobs import JobStatus
+from kairos_evals import PostgresSink
 from kairos_harness import Clock, HookChain, Hooks, Provider, RunContext, SystemClock
+from kairos_memory.reflection import ReflectionHooks
 from kairos_notify import (
     Channel,
     ConsoleChannel,
@@ -26,9 +31,22 @@ from kairos_policy import PolicyHooks
 from kairos_scheduler.scheduler import DIGEST_JOB_ID, Scheduler, digest_spec
 from kairos_scheduler.timing import next_fire
 from kairos_telemetry import TracingHooks, configure_tracing
+from kairos_tools.mcp import open_toolsets
 from kairos_worker.audit import AuditHooks
+from kairos_worker.backup import nightly
+from kairos_worker.online import OnlineEvals
 from kairos_worker.settings import Settings
-from kairos_worker.wiring import Runtime, build_provider, build_tools, http_client
+from kairos_worker.spend import SpendCap, SpendCapHooks
+from kairos_worker.wiring import (
+    Runtime,
+    add_delegate,
+    build_provider,
+    build_screen,
+    build_tools,
+    http_client,
+    mcp_configs,
+    memory_store,
+)
 from kairos_worker.worker import Worker
 
 HARNESS_VERSION = version("kairos-harness")
@@ -41,11 +59,14 @@ def parse_headers(raw: str) -> dict[str, str]:
     return {key.strip(): value.strip() for key, value in pairs}
 
 
-def tracing(settings: Settings, provider: Provider) -> tuple[TracerProvider, TracingHooks]:
+def tracing(
+    settings: Settings, provider: Provider, *, processors: tuple[SpanProcessor, ...] = ()
+) -> tuple[TracerProvider, TracingHooks]:
     tracer_provider = configure_tracing(
         service_version=HARNESS_VERSION,
         otlp_endpoint=settings.otlp_endpoint,
         otlp_headers=parse_headers(settings.otlp_headers),
+        processors=processors,
     )
     hooks = TracingHooks(
         tracer_provider.get_tracer("kairos"),
@@ -68,12 +89,24 @@ async def open_runtime(
     With an ``engine`` the agent also gets the schedule tools.
     """
     provider = provider or build_provider(settings)
-    tracer_provider, tracing_hooks = tracing(settings, provider)
-    async with http_client() as http:
+    online = (
+        OnlineEvals(
+            PostgresSink(engine),
+            now=(clock or SystemClock()).now,
+            harness_version=HARNESS_VERSION,
+            model=settings.model,
+        )
+        if engine is not None and settings.online_evals
+        else None
+    )
+    # Online evals read the spans as each one ends (in memory, on the event loop).
+    processors = (SimpleSpanProcessor(online.collector),) if online else ()
+    tracer_provider, tracing_hooks = tracing(settings, provider, processors=processors)
+    async with http_client() as http, AsyncExitStack() as stack:
         try:
+            memories = memory_store(settings, engine) if engine is not None else None
             if engine is None:
                 tools = build_tools(settings, http, clock=clock)
-                hooks: list[Hooks] = [PolicyHooks()]
             else:
                 notifications = NotificationStore(engine)
                 tools = build_tools(
@@ -81,14 +114,34 @@ async def open_runtime(
                     http,
                     jobs=JobStore(engine),
                     notify=lambda n, key: notifications.enqueue(n, dedupe_key=key),
+                    memory=memories,
                     clock=clock,
                 )
-                hooks = [
+            # MCP tools (the browser, configured servers) come after the built-ins, and
+            # before the hooks, which read every tool's risk.
+            for toolset in await open_toolsets(stack, mcp_configs(settings)):
+                for item in toolset.tools:
+                    tools.register(item)
+            hooks: list[Hooks] = (
+                [PolicyHooks()]
+                if engine is None
+                else [
+                    SpendCapHooks(
+                        spend_cap(settings, engine, clock or SystemClock()),
+                        NotificationStore(engine),
+                        clock=clock or SystemClock(),
+                    ),
                     PolicyHooks(actions_enabled=SettingsStore(engine).actions_enabled),
                     AuditHooks(AuditStore(engine), tools.specs()),
                 ]
+            )
+            if memories is not None and settings.memory_reflection:
+                hooks.append(ReflectionHooks(provider, memories, model=settings.job_model))
             # Policy first (its decision wins), tracing last (it sees the final state).
-            yield Runtime(settings, provider, tools, HookChain([*hooks, tracing_hooks]))
+            chain = HookChain([*hooks, tracing_hooks])
+            screen = build_screen(settings, provider)
+            add_delegate(tools, settings, provider, hooks=chain, clock=clock, screen=screen)
+            yield Runtime(settings, provider, tools, chain, screen, online)
         finally:
             tracer_provider.shutdown()
 
@@ -201,4 +254,35 @@ async def work(
                 scheduler.run_forever(stop, poll_seconds=settings.scheduler_poll_seconds)
             )
             group.create_task(dispatcher.run_forever(stop))
+            group.create_task(backfill_memories(memory_store(settings, engine)))
+            if runtime.online is not None:
+                group.create_task(
+                    runtime.online.run_forever(
+                        stop, flush_seconds=settings.online_evals_flush_seconds
+                    )
+                )
+            if settings.backups:
+                group.create_task(
+                    nightly(
+                        settings.backup_dir,
+                        stop,
+                        now=clock.now,
+                        timezone=settings.timezone,
+                        keep_days=settings.backup_keep_days,
+                    )
+                )
         log.info("worker_stopped")
+
+
+def spend_cap(settings: Settings, engine: AsyncEngine, clock: Clock) -> SpendCap:
+    ledger = SpendLedger(engine, timezone=settings.timezone)
+    return SpendCap(ledger, cap_usd=settings.daily_spend_cap_usd, clock=clock)
+
+
+async def backfill_memories(store: MemoryStore) -> None:
+    """Embed memories saved before the model was available. Best effort, once."""
+    try:
+        if done := await store.backfill():
+            log.info("memories_backfilled", count=done)
+    except Exception as error:
+        log.warning("memory_backfill_failed", error=str(error))

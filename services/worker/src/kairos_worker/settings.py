@@ -7,6 +7,7 @@ from pydantic import AliasChoices, Field, SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from kairos_domain.governance import ChannelName
+from kairos_tools.mcp import McpServerConfig
 
 
 class Settings(BaseSettings):
@@ -42,6 +43,46 @@ class Settings(BaseSettings):
         default=None, validation_alias=AliasChoices("TAVILY_API_KEY", "KAIROS_TAVILY_API_KEY")
     )
     """Enables ``web_search``. Without it the tool is not offered to the model."""
+    serpapi_api_key: SecretStr | None = Field(
+        default=None, validation_alias=AliasChoices("SERPAPI_API_KEY", "KAIROS_SERPAPI_API_KEY")
+    )
+    """Enables ``flights_search`` (Google Flights via SerpApi). Free plan: ~250 searches
+    a month; one watch checking every 6 hours uses ~120."""
+
+    # --- hardening (M7) -------------------------------------------------------------
+    backups: bool = True
+    """Nightly local database backups from the worker (after 03:00 local time)."""
+    backup_dir: Path = Field(default_factory=lambda: Path.home() / "Backups" / "kairos")
+    backup_keep_days: int = Field(default=14, ge=1)
+    daily_spend_cap_usd: float | None = Field(default=5.0, gt=0)
+    """Model spend per local day (``timezone``) after which runs and job firings stop
+    until midnight, and the owner is notified once. Unset for no cap."""
+    # --- deployment (M8) -------------------------------------------------------------
+    online_evals: bool = True
+    """Score every finished run with label-free metrics; written as the ``online`` suite."""
+    online_evals_flush_seconds: float = Field(default=6 * 3600, gt=0)
+    """How often collected scores are written (and once more on shutdown)."""
+    injection_screening: Literal["model", "patterns", "off"] = "model"
+    """Screen untrusted tool output: patterns always, and with ``model`` the job model
+    decides pattern matches (a fraction of a cent each). ``patterns`` flags every match."""
+
+    # --- subagents and memory (M6) ----------------------------------------------------
+    subagent_model: str = "claude-sonnet-5-5"
+    """Model for ``delegate`` children (focused, read-only research)."""
+    memory_embeddings: Literal["local", "none"] = "local"
+    """``local``: semantic recall with a small model on this machine (downloaded once,
+    about 67 MB, into ~/.cache/kairos/models). ``none``: keyword recall only."""
+    memory_reflection: bool = False
+    """After each completed chat turn, ask ``job_model`` to propose memories from it
+    (one small model call per turn). Proposals wait for the user's confirmation."""
+
+    # --- browser and MCP (M6) -------------------------------------------------------
+    browser: bool = False
+    """Offer the isolated browser (``browser_*`` tools) through its MCP server. Needs
+    Chromium: ``uv run playwright install chromium``."""
+    mcp_servers: list[McpServerConfig] = []
+    """Extra MCP servers, as JSON. Their tools need approval and their output is treated
+    as untrusted unless a server's ``tools`` entry says otherwise."""
 
     # --- notifications (M4) ---------------------------------------------------------
     email_provider: Literal["ses", "smtp"] | None = None
@@ -67,6 +108,7 @@ class Settings(BaseSettings):
 
     @field_validator(
         "tavily_api_key",
+        "serpapi_api_key",
         "email_provider",
         "email_to",
         "email_from",

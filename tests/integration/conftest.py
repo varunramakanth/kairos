@@ -19,7 +19,7 @@ IMAGE = "pgvector/pgvector:pg17"
 
 
 @pytest.fixture(scope="session")
-def database_url() -> Iterator[str]:
+def postgres() -> Iterator[PostgresContainer]:
     try:
         container = PostgresContainer(IMAGE, driver="asyncpg")
         container.start()
@@ -28,11 +28,15 @@ def database_url() -> Iterator[str]:
             raise
         pytest.skip(f"Docker is not available for integration tests: {error}")
     try:
-        url = container.get_connection_url()
-        upgrade(url)
-        yield url
+        upgrade(container.get_connection_url())
+        yield container
     finally:
         container.stop()
+
+
+@pytest.fixture(scope="session")
+def database_url(postgres: PostgresContainer) -> str:
+    return postgres.get_connection_url()
 
 
 @pytest.fixture
@@ -42,7 +46,7 @@ async def engine(database_url: str) -> AsyncIterator[AsyncEngine]:
         await connection.execute(
             text(
                 "TRUNCATE threads, runs, jobs, notifications, audit_log, "
-                "push_subscriptions, app_settings, eval_runs CASCADE"
+                "push_subscriptions, app_settings, eval_runs, eval_labels, memories CASCADE"
             )
         )
     yield engine

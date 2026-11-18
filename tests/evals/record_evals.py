@@ -52,7 +52,7 @@ async def record(
     detector and simulator answers that are missing (after a judge prompt change)."""
     agent_live = not judge_only
     adapter: KairosAdapter = haiku(live=agent_live) if use_haiku else KairosAdapter(live=agent_live)
-    factories = {f.__name__: f for f in (*suites.ALL, *suites.COMPARISON)}
+    factories = {f.__name__: f for f in (*suites.ALL, *suites.PENDING, *suites.COMPARISON)}
     models: list[ModelCassette] = []  # every judge/simulator used so far, for the spend total
 
     def spent() -> float:

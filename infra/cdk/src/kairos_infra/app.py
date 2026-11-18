@@ -2,7 +2,8 @@
 
     npx aws-cdk@2.1148.1 deploy -c owner_email=you@example.com -c cognito_prefix=kairos-abc123
 
-``-c with_browser=true`` adds Chromium; ``-c monthly_budget_usd=60`` changes the budget.
+``-c with_browser=true`` adds Chromium; ``-c monthly_budget_usd=60`` changes the budget;
+``-c availability_zones=ca-central-1a,ca-central-1b`` picks the two AZs (docs/runbook.md).
 The account comes from the AWS profile in use; the region is ca-central-1 (ADR-006).
 """
 
@@ -32,6 +33,9 @@ def main() -> None:
         monthly_budget_usd=float(context("monthly_budget_usd", "80")),
         with_browser=context("with_browser", "false").lower() == "true",
         postgres_version=context("postgres_version", "17.9"),
+        availability_zones=tuple(
+            zone.strip() for zone in context("availability_zones", "").split(",") if zone.strip()
+        ),
     )
     KairosStack(
         app,

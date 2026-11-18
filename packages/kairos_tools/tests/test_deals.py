@@ -18,6 +18,8 @@ from kairos_tools.deals import deals_search_tool, find_prices
         ("Price: 419.00 CAD. Ships for $3.99", [419.0]),  # under $5 is a fee, not a price
         ("4.6 out of 5 stars, 27-inch, 2160p", []),
         ("USD 299 each", [299.0]),
+        ("$379.99 or $32/mo for 12 months. Save $70!", [379.99]),
+        ("Now $349.99 ($100 off)", [349.99]),
     ],
 )
 def test_prices_are_read_from_page_text(text: str, prices: list[float]) -> None:

@@ -30,6 +30,7 @@ from kairos_domain.content import Message
 from kairos_domain.events import RunFinished
 from kairos_domain.governance import Notification
 from kairos_domain.jobs import Job, JobSpec, JobStatus
+from kairos_domain.memory import Memory, MemoryKind, MemorySource, MemoryStatus
 from kairos_domain.run import RunRequest
 from kairos_evals import Example, OtlpJsonTraceSource, Trace, TraceFilter
 from kairos_harness import AgentLoop, FakeClock, HookChain, InMemoryCheckpointer, SeededIdGenerator
@@ -39,6 +40,7 @@ from kairos_harness.cassette import (
     ReplayProvider,
     ReplayToolExecutor,
 )
+from kairos_memory.testing import MemoryMemories
 from kairos_policy import PolicyHooks
 from kairos_scheduler.testing import MemoryJobs
 from kairos_telemetry import OtlpJsonFileExporter, TracingHooks, configure_tracing
@@ -49,6 +51,8 @@ REFERENCE_NOW = datetime(2026, 11, 18, 19, 0, tzinfo=UTC)
 """Wednesday 18 November 2026, 14:00 in Toronto."""
 AGENT_MODEL = "claude-sonnet-5-5"
 BROWSER_TAG = "browser"
+MEMORY_TAG = "memory"
+"""Cases with this tag get the memory tools, seeded from ``metadata.memories``."""
 """Cases with this tag also get the browser tools (live: the real browser service)."""
 
 
@@ -104,6 +108,25 @@ STANDARD_JOBS: tuple[Job, ...] = (
     _job("job_lunch_walk", "Lunch walk reminder", _cron("0 12 * * 1-5"), status="paused"),
 )
 """The user's existing jobs in every case, so "pause my news digest" has a target."""
+
+
+def seeded_memories(example: Example) -> MemoryMemories:
+    """The user's confirmed memories for a case (``metadata.memories``)."""
+    store = MemoryMemories()
+    raw = example.metadata.get("memories")
+    for i, item in enumerate(raw if isinstance(raw, list) else []):
+        if isinstance(item, dict):
+            store.items[f"mem_seed{i}"] = Memory(
+                id=f"mem_seed{i}",
+                kind=MemoryKind(str(item.get("kind", "preference"))),
+                content=str(item.get("content", "")),
+                status=MemoryStatus.ACTIVE,
+                source=MemorySource.USER,
+                run_id=None,
+                created_at=REFERENCE_NOW,
+                updated_at=REFERENCE_NOW,
+            )
+    return store
 
 
 def seeded_jobs() -> MemoryJobs:
@@ -238,7 +261,10 @@ class KairosAdapter:
             httpx2.AsyncClient(transport=transport, follow_redirects=False) as http,
             AsyncExitStack() as stack,
         ):
-            tools = build_tools(Settings(), http, jobs=seeded_jobs(), notify=_discard, clock=clock)
+            memory = seeded_memories(example) if MEMORY_TAG in example.tags else None
+            tools = build_tools(
+                Settings(), http, jobs=seeded_jobs(), notify=_discard, memory=memory, clock=clock
+            )
             if BROWSER_TAG in example.tags:
                 # Only browser cases get the browser: adding its tools to every case would
                 # change every recorded request. Planted pages are served by the browser.

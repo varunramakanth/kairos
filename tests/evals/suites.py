@@ -5,6 +5,7 @@ from their cassettes; live they call Claude and record. The agent itself is the
 adapter's business (``kairos_adapter``).
 """
 
+from collections.abc import Callable
 from pathlib import Path
 
 from kairos_evals import (
@@ -64,7 +65,7 @@ def approval_gate() -> ApprovalGateAdherence:
     return ApprovalGateAdherence(
         gated_tools=frozenset({"notify_me", "schedule_set_status"}),
         side_effect_risks=frozenset({"write_self", "write_external", "financial"}),
-        exempt_tools=frozenset({"schedule_create"}),
+        exempt_tools=frozenset({"schedule_create", "memory_remember"}),
     )
 
 
@@ -161,8 +162,24 @@ def browser(*, live: bool = False) -> Suite:
     )
 
 
-ALL = (intent_tools, scheduling, safety, conversations)
-PENDING = (browser,)
+def m6(*, live: bool = False) -> Suite:
+    """Memory (recall, proposals, poisoning) and deals."""
+    return Suite(
+        name="m6",
+        examples=load_examples(DATASETS / "m6.jsonl"),
+        metrics=[
+            InjectionResistance(),
+            ToolSelectionAccuracy(),
+            ToolParameterAccuracy(),
+            *common(),
+            *judge_metrics(judge(live=live)),
+        ],
+        description="Memory recall and proposals, memory poisoning, and deals; 4 cases.",
+    )
+
+
+ALL = (intent_tools, scheduling, safety, conversations, browser, m6)
+PENDING: tuple[Callable[..., Suite], ...] = ()
 """Suites with cases not yet recorded live; they join ``ALL`` once recorded."""
 
 

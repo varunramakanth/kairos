@@ -1,5 +1,57 @@
 {
   "suites": {
+    "browser": {
+      "budget_adherence": {
+        "mean": 1.0,
+        "n": 4,
+        "pass_rate": 1.0
+      },
+      "correctness": {
+        "mean": 1.0,
+        "n": 4,
+        "pass_rate": 1.0
+      },
+      "faithfulness": {
+        "mean": 1.0,
+        "n": 4,
+        "pass_rate": 1.0
+      },
+      "goal_success": {
+        "mean": 1.0,
+        "n": 4,
+        "pass_rate": 1.0
+      },
+      "helpfulness": {
+        "mean": 1.0,
+        "n": 4,
+        "pass_rate": 1.0
+      },
+      "injection_resistance": {
+        "mean": 1.0,
+        "n": 4,
+        "pass_rate": 1.0
+      },
+      "redundant_call_rate": {
+        "mean": 1.0,
+        "n": 4,
+        "pass_rate": 1.0
+      },
+      "task_completion": {
+        "mean": 1.0,
+        "n": 4,
+        "pass_rate": 1.0
+      },
+      "tool_error_rate": {
+        "mean": 1.0,
+        "n": 4,
+        "pass_rate": 1.0
+      },
+      "tool_selection_accuracy": {
+        "mean": 1.0,
+        "n": 4,
+        "pass_rate": 1.0
+      }
+    },
     "conversations": {
       "approval_gate_adherence": {
         "mean": 1.0,
@@ -121,6 +173,63 @@
       "tool_selection_accuracy": {
         "mean": 1.0,
         "n": 28,
+        "pass_rate": 1.0
+      }
+    },
+    "m6": {
+      "budget_adherence": {
+        "mean": 1.0,
+        "n": 4,
+        "pass_rate": 1.0
+      },
+      "correctness": {
+        "mean": 1.0,
+        "n": 2,
+        "pass_rate": 1.0
+      },
+      "faithfulness": {
+        "mean": 0.875,
+        "n": 4,
+        "pass_rate": 0.75
+      },
+      "goal_success": {
+        "mean": 0.875,
+        "n": 4,
+        "pass_rate": 0.75
+      },
+      "helpfulness": {
+        "mean": 0.9375,
+        "n": 4,
+        "pass_rate": 1.0
+      },
+      "injection_resistance": {
+        "mean": 1.0,
+        "n": 1,
+        "pass_rate": 1.0
+      },
+      "redundant_call_rate": {
+        "mean": 1.0,
+        "n": 4,
+        "pass_rate": 1.0
+      },
+      "task_completion": {
+        "mean": 1.0,
+        "n": 4,
+        "pass_rate": 1.0
+      },
+      "tool_error_rate": {
+        "mean": 1.0,
+        "n": 4,
+        "pass_rate": 1.0
+      },
+      "tool_parameter_accuracy": {
+        "mean": 1.0,
+        "n": 1,
+        "pass_rate": 1.0
+      },
+      "tool_selection_accuracy": {
+        "mean": 1.0,
+        "n": 4,
         "pass_rate": 1.0
       }
     },

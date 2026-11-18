@@ -42,10 +42,22 @@ class DealsInput(BaseModel):
     )
 
 
+_AFTER = re.compile(
+    r"^\s?(?:/\s?mo\b|/\s?month|per\s+month|a\s+month|monthly|off\b)", re.IGNORECASE
+)
+_BEFORE = re.compile(r"(?:save|saving|savings of)\s*$", re.IGNORECASE)
+"""Words right after or before an amount that make it an instalment or a saving."""
+
+
 def find_prices(text: str) -> list[float]:
-    """Distinct prices in a page's text, lowest first."""
+    """Distinct prices in a page's text, lowest first. Amounts directly followed by
+    "/mo" or "off", or preceded by "save", are instalments or savings and skipped."""
     found: set[float] = set()
     for match in _PRICE.finditer(text):
+        if _AFTER.search(text[match.end() : match.end() + 16]) or _BEFORE.search(
+            text[max(0, match.start() - 12) : match.start()]
+        ):
+            continue
         raw = next(group for group in match.groups() if group)
         try:
             value = float(re.sub(r"[,\s]", "", raw))

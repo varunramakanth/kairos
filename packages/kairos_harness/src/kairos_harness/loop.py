@@ -60,7 +60,12 @@ from kairos_domain.tools import Deny, RequireApproval, ToolContext, ToolOutput, 
 from kairos_harness.budget import PriceTable, exceeded
 from kairos_harness.clock import SystemClock, UuidIdGenerator
 from kairos_harness.compaction import estimate_tokens, new_epoch, summary_request_messages
-from kairos_harness.context import build_system_prompt, present_tool_output, truncate
+from kairos_harness.context import (
+    build_system_prompt,
+    pending_summary,
+    present_tool_output,
+    truncate,
+)
 from kairos_harness.hooks import BaseHooks
 from kairos_harness.protocols import (
     Checkpointer,
@@ -376,7 +381,18 @@ class AgentLoop:
                     input=call.input,
                     risk=spec.risk,
                 )
-            async for event in self._finish(session, StopReason.AWAITING_APPROVAL):
+            # The user must never be left with a silent pause. If the model said
+            # nothing alongside the gated call, say exactly what is waiting, built
+            # from the call itself. It is shown to the user, never added to history.
+            last = state.messages[-1] if state.messages else None
+            spoken = last.text.strip() if last is not None and last.role == "assistant" else ""
+            pending = [(call.name, call.input) for call, _, _ in approvals]
+            held = [(call.name, call.input) for call, _ in runnable]
+            async for event in self._finish(
+                session,
+                StopReason.AWAITING_APPROVAL,
+                output=spoken or pending_summary(pending, held),
+            ):
                 yield event
             return
 

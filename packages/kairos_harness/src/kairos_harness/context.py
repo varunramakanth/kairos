@@ -1,4 +1,10 @@
-"""What the model sees: the system prompt and how tool output is presented."""
+"""What the model sees (the system prompt, how tool output is presented) and what
+the user is told when a run pauses."""
+
+import json
+from collections.abc import Mapping, Sequence
+
+from pydantic import JsonValue
 
 from kairos_domain.content import Provenance
 from kairos_domain.run import RunRequest
@@ -53,3 +59,33 @@ def truncate(content: str, *, limit: int, blob_id: str) -> str:
         f"{content[:limit]}\n\n[truncated: {omitted} more characters. "
         f"The full result is stored as {blob_id}.]"
     )
+
+
+def _preview(value: JsonValue, limit: int = 120) -> str:
+    text = value if isinstance(value, str) else json.dumps(value, ensure_ascii=False)
+    return text if len(text) <= limit else text[: limit - 1] + "…"
+
+
+def _call_line(name: str, arguments: Mapping[str, JsonValue]) -> str:
+    details = ", ".join(f"{key}: {_preview(value)}" for key, value in arguments.items())
+    return f"- {name}" + (f" ({details})" if details else "")
+
+
+def pending_summary(
+    calls: Sequence[tuple[str, Mapping[str, JsonValue]]],
+    held: Sequence[tuple[str, Mapping[str, JsonValue]]] = (),
+) -> str:
+    """What a run paused for approval is waiting on, in plain words.
+
+    Used when the model asked for a gated action without saying anything, so the
+    user still learns what will happen and that it needs them. ``held`` are calls
+    from the same step that need no approval but wait with it, since a step's calls
+    run all together or not at all.
+    """
+    lines = ["Waiting for your approval before I go ahead:"]
+    lines += [_call_line(name, arguments) for name, arguments in calls]
+    if held:
+        lines.append("Held until then, from the same step:")
+        lines += [_call_line(name, arguments) for name, arguments in held]
+    lines.append("Approve or decline it in Kairos; nothing happens until you do.")
+    return "\n".join(lines)

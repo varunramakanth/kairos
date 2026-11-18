@@ -2,6 +2,7 @@
 
 import asyncio
 import itertools
+import json
 from collections.abc import Sequence
 
 import pytest
@@ -457,6 +458,17 @@ async def test_approval_pauses_the_run_and_resume_runs_the_tool() -> None:
     ]
     assert finished(events).stop_reason is StopReason.AWAITING_APPROVAL
     assert waiting.tools.calls == []
+    # The model said nothing, so the user is told what is waiting; history is untouched.
+    assert finished(events).output_text == (
+        "Waiting for your approval before I go ahead:\n"
+        "- echo (q: x)\n"
+        "Approve or decline it in Kairos; nothing happens until you do."
+    )
+    paused = await checkpointer.load("run_1")
+    assert paused is not None
+    assert "Waiting for your approval" not in json.dumps(
+        [m.model_dump(mode="json") for m in paused.messages]
+    )
 
     approved = Harness([text_turn("sent")], tools, hooks=Gate(Allow()), checkpointer=checkpointer)
     events = await approved.run()
@@ -696,3 +708,19 @@ async def test_streamed_text_ends_under_the_id_it_started_with() -> None:
     (start,) = (e for e in events if isinstance(e, TextMessageStart))
     (end,) = (e for e in events if isinstance(e, TextMessageEnd))
     assert start.message_id == end.message_id
+
+
+def test_pending_summary_lists_calls_held_with_the_gated_one() -> None:
+    from kairos_harness.context import pending_summary
+
+    text = pending_summary(
+        [("schedule_set_status", {"job_id": "job_1", "status": "deleted"})],
+        [("schedule_create", {"name": "Fare watch", "body": "x" * 200})],
+    )
+    assert text.splitlines() == [
+        "Waiting for your approval before I go ahead:",
+        "- schedule_set_status (job_id: job_1, status: deleted)",
+        "Held until then, from the same step:",
+        f"- schedule_create (name: Fare watch, body: {'x' * 119}…)",
+        "Approve or decline it in Kairos; nothing happens until you do.",
+    ]

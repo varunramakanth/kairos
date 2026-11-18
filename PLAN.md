@@ -150,7 +150,7 @@ This is where the codebase earns its "state of the art" label. It should be a cl
 |---|---|
 | `web_search` | Tavily (ADR-008); behind one tool name so the provider can change. Return sources with URLs |
 | `web_fetch` | Main-text extraction (trafilatura) to Markdown with links; refuses non-public addresses on every redirect hop (ADR-008). Robots and caching later |
-| `browser.*` | Navigate, read, screenshot, extract, via the `services/browser` service; "take control" view in the UI later |
+| `browser_*` | navigate, snapshot, extract, click (links only) and search (search boxes only) are read; type and press need approval. Our own Playwright MCP server in `services/browser`, reached through the MCP client (ADR-012). No screenshots (tool results are text) |
 | `email.send` / `email.draft` | Gmail API (OAuth) or SES. **Policy:** sending to self is auto; sending to anyone else needs approval |
 | `email.search` / `email.read` | Gmail read-only scope first |
 | `calendar.*` | Google Calendar; creating or updating events needs approval |
@@ -159,7 +159,7 @@ This is where the codebase earns its "state of the art" label. It should be a cl
 | `memory.*` | remember / recall / forget |
 | `schedule.*` | create / list / update / pause / delete jobs and watches |
 | `notify.*` | email / push to me |
-| `mcp.*` | Generic MCP client so any MCP server can be plugged in |
+| MCP servers | Generic MCP client (`KAIROS_MCP_SERVERS`): tools are prefixed, need approval and are untrusted unless configured otherwise; server annotations are ignored (ADR-012) |
 
 All tools share one schema format (Pydantic model → JSON Schema), registered with a `@tool` decorator. Each tool declares a **risk level** (`read`, `write_self`, `write_external`, `financial`), whether it is **idempotent**, and the **provenance** of what it returns (`trusted` or `untrusted`).
 
@@ -340,7 +340,7 @@ Worth evaluating in an ADR: **Bedrock AgentCore** (Runtime, Memory, Gateway, Obs
 | **M3** | Scheduler + watches | Cron/interval/one-shot/watch with leases, DST-safe; NL → job creation with confirmation; Tasks UI with history + value sparkline; fake-clock tests. *Built 2026-11-17 (ADR-009); alerts are stored and shown, delivery is M4.* |
 | **M4** | Notify + email + approvals | Email to self (SES/Gmail), web push, policy engine, approval inbox, audit log. Weekly-digest job works end to end. *Decided 2026-11-17 by the owner: email to self via Amazon SES with a send-only IAM policy (revised from a Gmail app password, ADR-010); self-hosted Web Push (VAPID); strict approvals, meaning every agent action with a side effect waits for approval, including email to self and job changes, while system notifications (alerts, digest) are delivered without one; weekly digest Sunday 18:00 America/Toronto. Built 2026-11-17 (ADR-010).* |
 | **M5** | Eval framework v1 | `kairos-evals` with workflow, 3-layer metrics, golden datasets (≥50 cases for intent/tool/scheduling), simulator, S3 + dashboard, CI regression gate. *Decided 2026-11-18 by the owner: datasets LLM-seeded then curated; Sonnet 5.5 as judge; results in Postgres + JSONL now, with the S3 Parquet sink built and tested offline and pointed at a bucket in M8; live spend up to ~$3. Built 2026-11-18 (ADR-011): own metric library (Ragas requires LangChain; DeepEval pulls in analytics and pytest at runtime), 73 curated cases, cached judge and simulator, baseline gate with 1.0 floors on approval gates and injection resistance, Haiku 5.5 comparison for layer 3.* |
-| **M6** | Memory + subagents + browser | pgvector memory with UI, reflection hook, subagents, Playwright browser service, flight + deal adapters; flight-watch scenario passes end to end |
+| **M6** | Memory + subagents + browser | pgvector memory with UI, reflection hook, subagents, Playwright browser service, flight + deal adapters; flight-watch scenario passes end to end *In progress (2026-11-18). Built: a generic MCP client, and the browser service as our own Playwright MCP server (ADR-012), with public addresses only, reading allowed, and typing or pressing needing approval. Still open: a flight data provider, a deal approach, embeddings for memory, and the M6 live-spend budget (owner's decisions); memory, the reflection hook, subagents and the flight-watch scenario.* |
 | **M7** | Hardening | Prompt-injection suite passing, judge calibration, kill switch, rate limits, backups, threat model doc |
 | **M8** | AWS prod | CDK stacks deployed to `dev` then `prod`, Cognito login, alarms, budgets, runbook; online evals sampling prod traces |
 | **M9** | Polish | PWA, ⌘K, mobile layout, onboarding, README with architecture diagrams, demo video script |

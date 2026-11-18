@@ -1,0 +1,25 @@
+[project]
+name = "kairos-api"
+version = "0.1.0"
+description = "FastAPI service: REST and SSE streaming."
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.163,<1",
+    "kairos-db",
+    "kairos-domain",
+    "kairos-harness",
+    "kairos-scheduler",
+    "kairos-worker",
+    "uvicorn[standard]>=0.54",
+]
+
+[build-system]
+requires = ["uv_build>=0.9,<0.13"]
+build-backend = "uv_build"
+
+[tool.uv.sources]
+kairos-domain = { workspace = true }
+kairos-worker = { workspace = true }
+kairos-db = { workspace = true }
+kairos-harness = { workspace = true }
+kairos-scheduler = { workspace = true }

@@ -1,0 +1,1 @@
+{"id": "cited_answer_agent_evals", "input": "What's new in agent evals this month? Cite your sources.", "expected_tools": ["web_search", "web_fetch"], "budget": {"cost_usd": 0.25, "tool_calls": 12}, "tags": ["web", "citations", "live"]}

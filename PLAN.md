@@ -33,7 +33,7 @@ Reference products: Meta's Muse-style personal agents, Claude's background agent
 | `kairos-evals` | **Python.** Framework-agnostic eval library + CLI + datasets. It reads OpenTelemetry traces, so it can evaluate any agent and not only Kairos |
 | `kairos-infra` | **Python** AWS CDK for every environment |
 
-Use a single monorepo to start if that is simpler, and split later. The package boundaries below already make that split clean.
+**Decision (ADR-004):** one monorepo for now. `kairos-evals` lives at `packages/kairos_evals` as a standalone-publishable package and the CDK app lives at `infra/`. CI fails if `kairos_evals` imports any other `kairos_*` package, so splitting into the three repos above stays mechanical.
 
 ### Language split
 
@@ -58,7 +58,7 @@ services/
   browser/             Playwright-for-Python service (token-protected), persistent profiles           [Python]
 packages/              uv workspace members, src/ layout, each with its own pyproject.toml           [Python]
   kairos_harness/      The agent loop: model calls, tool dispatch, context mgmt, subagents, hooks
-  kairos_providers/    Model provider adapters: Anthropic API, Amazon Bedrock (Converse API), OpenAI-compatible
+  kairos_providers/    Model provider adapters: Anthropic API, Amazon Bedrock (Messages API via the SDK's Mantle client); Converse / OpenAI-compatible later
   kairos_tools/        Built-in tools + MCP client bridge (official `mcp` Python SDK)
   kairos_memory/       Long-term memory (facts, episodes, preferences) + retrieval
   kairos_scheduler/    Cron/interval/one-shot/"watch" definitions, timezone-safe next-run calc (zoneinfo)
@@ -67,6 +67,10 @@ packages/              uv workspace members, src/ layout, each with its own pypr
   kairos_db/           SQLAlchemy models + Alembic migrations (Postgres + pgvector)
   kairos_telemetry/    OpenTelemetry setup using GenAI semantic conventions
   kairos_domain/       Shared Pydantic models (also the source of the OpenAPI/TS types)
+  kairos_evals/        Eval framework (§4). Standalone: must not import any other kairos_* package
+infra/
+  compose.yaml         Local Postgres + pgvector; Langfuse under the `obs` profile
+  cdk/                 AWS CDK app in Python (M8)
 tests/                 pytest integration tests; Playwright e2e for the UI
 docs/adr/              Architecture Decision Records
 pyproject.toml         uv workspace root
@@ -103,7 +107,7 @@ flowchart TD
   EVAL --> DASH[Eval dashboard + alerts]
 ```
 
-### 3.1 The harness (`packages/harness`)
+### 3.1 The harness (`packages/kairos_harness`)
 
 This is where the codebase earns its "state of the art" label. It should be a clean, readable reference implementation.
 
@@ -111,37 +115,42 @@ This is where the codebase earns its "state of the art" label. It should be a cl
 - **Run model:** each run is a durable record (`runs`, `run_steps`, `tool_calls`). A run can **pause** (waiting for approval or for input), **resume** after a crash or redeploy using **checkpointing** after every step, and be **cancelled** or **retried** with idempotency keys on side-effecting tools.
 - **Context engineering:**
   - The system prompt is assembled from parts: identity, user profile, relevant memories, active goals, tool docs, current time and timezone.
-  - **Compaction:** when context passes a threshold, summarize older turns and keep a structured "working state" (goal, plan, findings, open questions).
+  - **Append-only history (hard rule):** current Claude models require thinking blocks to be replayed unchanged, in the conversation that produced them. The harness never edits or deletes earlier turns; thinking blocks are stored opaque and replayed byte-for-byte.
+  - **Compaction:** when context passes a threshold, start a new context "epoch" seeded with a summary and a structured "working state" (goal, plan, findings, open questions). Earlier turns stay in the DB untouched.
   - **Tool-result truncation**, with a "read more" handle stored in the DB.
   - **Prompt caching** for the stable prefix (Anthropic and Bedrock both support it).
 - **Planning:** an optional explicit plan step for multi-step tasks. The plan is a visible checklist in the UI that the agent updates as it goes.
 - **Subagents:** the parent spawns focused children (for example "research flights", "summarize news") that have isolated context and a restricted toolset, and return a compact result.
-- **Hooks:** `beforeModel`, `afterModel`, `beforeTool`, `afterTool`, `onError`, `onComplete`, used for policy, telemetry, memory writes and guardrails.
-- **Model routing:** a cheap or fast model for routine scheduled checks and a strong model for chat and planning. The choice is configurable per job.
+- **Hooks:** `before_model`, `after_model`, `before_tool`, `after_tool`, `on_error`, `on_complete`, used for policy, telemetry, memory writes and guardrails.
+- **Model routing:** a cheap or fast model for routine scheduled checks and a strong model for chat and planning. The choice is configurable per job. Defaults (IDs verified 2026-11): chat and planning `claude-opus-5-5`; judges and subagents `claude-sonnet-5-5`; routine scheduled checks `claude-haiku-5-5`. Thinking cannot be disabled on these models, so `output_config.effort` is the cost knob.
 - **Budgets:** caps on tokens, dollars, wall-clock time and tool calls per run and per scheduled job, with a daily global cap.
 - **Determinism hooks for evals:** an injectable clock, injectable tool transport (record/replay "cassettes"), and a seeded run ID.
 
 > Decision to record as ADR-001: **build our own thin harness** (for learning value and full control) versus wrapping the **Claude Agent SDK (Python)**, **Strands Agents** or **LangGraph**. Recommendation: build our own core loop behind a `Harness` Protocol, and write adapters that run the same tools and evals on Claude Agent SDK and Strands (LangGraph optional), so they can be compared head to head in `kairos-evals`. **No LangChain** in the core. Verify the current SDK APIs at build time; do not rely on memory.
 >
-> Python specifics: fully async (`asyncio.TaskGroup` for parallel tool calls), structured concurrency with cancellation, Pydantic models for every message/event/tool schema, `anthropic` and `boto3`/`aioboto3` (Bedrock Converse) SDKs behind the provider interface.
+> **Decided in ADR-001:** own core loop behind a `Harness` Protocol; the other frameworks are comparison adapters in `kairos_evals` only.
+>
+> Python specifics: fully async (`asyncio.TaskGroup` for parallel tool calls), structured concurrency with cancellation, Pydantic models for every message/event/tool schema. Both providers use the `anthropic` SDK behind the provider interface: `AsyncAnthropic` for the Anthropic API and `AsyncAnthropicBedrockMantle` for Bedrock, sharing one Messages translation layer. A Converse (`aioboto3`) adapter can be added behind the same Protocol if non-Claude Bedrock models are ever needed.
+>
+> Test determinism (ADR-005): cassettes at two levels. Model calls are recorded at the provider boundary as JSONL of normalized model events; plain-HTTP tools use `vcrpy`. `anthropic` (1.0 and later; 2.9 today) uses `httpx2`, so `httpx2.alias_httpx()` must run before `vcrpy`/`respx` load.
 
-### 3.2 Scheduling and watches (`packages/scheduler`)
+### 3.2 Scheduling and watches (`packages/kairos_scheduler`)
 
 - Job types: `cron`, `interval`, `one_shot` (with natural-language parsing like "tomorrow 8am", confirmed back to me), and `watch`.
 - A **watch** is a structured primitive, not just a prompt on a timer:
   `{ target (query/URL/API params), extractor, condition (e.g. price < X, text appears, diff > threshold), dedupe key, cooldown, backoff on failure, notify channel, expiry date }`.
   The agent creates watches from natural language, and I can edit them in the UI.
 - Store timezones as IANA names (default `America/Toronto`). Handle DST correctly and test it.
-- A scheduler loop claims due jobs with **Postgres leases** (`SELECT … FOR UPDATE SKIP LOCKED`) so double-firing is impossible. Write this by hand for readability (ADR-003 should also weigh `procrastinate`, Temporal's Python SDK and Step Functions). Use `croniter` for cron and `zoneinfo` for timezones. In prod, EventBridge Scheduler can optionally wake the worker, but Postgres remains the source of truth.
+- A scheduler loop claims due jobs with **Postgres leases** (`SELECT … FOR UPDATE SKIP LOCKED`) so double-firing is impossible. Written by hand for readability (decided in ADR-003, which weighs `procrastinate`, Temporal's Python SDK and Step Functions). Each claim gets a fresh `lease_id` used as a fencing token on every later write. Use `croniter` for cron and `zoneinfo` for timezones. In prod, EventBridge Scheduler can optionally wake the worker, but Postgres remains the source of truth.
 - Every job run is an ordinary harness run, so it gets traces, evals and budgets for free.
 
-### 3.3 Tools (`packages/tools`)
+### 3.3 Tools (`packages/kairos_tools`)
 
 | Tool | Notes |
 |---|---|
-| `web_search` | Pluggable: Brave / Tavily / Exa. Return sources with URLs |
-| `web_fetch` | Readability extraction; respect robots; cache |
-| `browser.*` | Navigate, read, screenshot, extract, via the `apps/browser` service; "take control" view in the UI later |
+| `web_search` | Tavily (ADR-008); behind one tool name so the provider can change. Return sources with URLs |
+| `web_fetch` | Main-text extraction (trafilatura) to Markdown with links; refuses non-public addresses on every redirect hop (ADR-008). Robots and caching later |
+| `browser.*` | Navigate, read, screenshot, extract, via the `services/browser` service; "take control" view in the UI later |
 | `email.send` / `email.draft` | Gmail API (OAuth) or SES. **Policy:** sending to self is auto; sending to anyone else needs approval |
 | `email.search` / `email.read` | Gmail read-only scope first |
 | `calendar.*` | Google Calendar; creating or updating events needs approval |
@@ -152,17 +161,17 @@ This is where the codebase earns its "state of the art" label. It should be a cl
 | `notify.*` | email / push to me |
 | `mcp.*` | Generic MCP client so any MCP server can be plugged in |
 
-All tools share one schema format (Pydantic model → JSON Schema), registered with a `@tool` decorator. Each tool declares a **risk level** (`read`, `write_self`, `write_external`, `financial`) and whether it is **idempotent**.
+All tools share one schema format (Pydantic model → JSON Schema), registered with a `@tool` decorator. Each tool declares a **risk level** (`read`, `write_self`, `write_external`, `financial`), whether it is **idempotent**, and the **provenance** of what it returns (`trusted` or `untrusted`).
 
-### 3.4 Safety and policy (`packages/policy`)
+### 3.4 Safety and policy (`packages/kairos_policy`)
 
-- **Content from the web, email and documents is data, never instructions.** Wrap it in clearly delimited blocks, and add a prompt-injection classifier hook on tool results.
+- **Content from the web, email and documents is data, never instructions.** From M1, every tool result carries its provenance and untrusted content is wrapped in clearly delimited data blocks. The prompt-injection classifier hook on tool results and the adversarial suite land in M7.
 - **Approval rules:** by risk level and recipient. Example: an email to myself is auto, an email to others needs approval, and financial actions are always blocked.
 - **Approval inbox** in the UI, with one-tap approve or reject, an edit-before-send option, and an expiry.
 - **Kill switch:** pause all jobs at once.
 - **Audit log** of every side-effecting action, linked to its trace.
 
-### 3.5 Memory (`packages/memory`)
+### 3.5 Memory (`packages/kairos_memory`)
 
 - Types: **profile facts**, **preferences**, **episodic** (what happened in past runs), **goal/task state**.
 - Postgres + **pgvector** for semantic recall; hybrid retrieval (BM25 + vector) and recency weighting.
@@ -182,13 +191,14 @@ High quality, fast and calm. Linear or Raycast are the bar, not a generic chatbo
 - **Evals:** dashboard of scores over time, regressions, and a human-review queue (see §4.6).
 - **Settings:** connectors (Google OAuth), models, budgets, notification channels, timezone.
 - Mobile-first responsive design, a PWA with web push, dark mode and keyboard shortcuts (⌘K command palette).
-- Streaming protocol: **AG-UI** (as in CopilotKit/OpenFuse; it has a Python SDK for the FastAPI side) or a plain typed SSE event stream defined by Pydantic models. Record the choice in an ADR.
+- Streaming protocol (decided in ADR-002): a typed SSE event stream defined by Pydantic models in `kairos_domain`, with event names and lifecycle aligned to **AG-UI** so an AG-UI endpoint can be added later as a mapping layer. Events are rows of `run_events`, so a client resumes with `Last-Event-ID`.
 - The UI uses only the generated typed client. No hand-written API types.
 
-### 3.7 Observability (`packages/telemetry`)
+### 3.7 Observability (`packages/kairos_telemetry`)
 
 - OpenTelemetry everywhere (`opentelemetry-sdk` + FastAPI/SQLAlchemy/httpx auto-instrumentation), using **GenAI semantic conventions** (`gen_ai.*` attributes) for model and tool spans.
-- Local: self-hosted **Langfuse** (or Arize Phoenix) via docker compose.
+- The GenAI conventions are still in "Development" status (moved to the `semantic-conventions-genai` repo in mid-2026), so the version we target is pinned and recorded in `kairos_telemetry`.
+- Local: self-hosted **Langfuse** (or Arize Phoenix) via docker compose, behind the `obs` profile (`just dev-obs`) because the stack is heavy; plain `just dev` starts only Postgres.
 - Prod: OTLP to Langfuse on AWS, or to CloudWatch/X-Ray. Make the exporter configurable.
 - Every trace carries `run_id`, `job_id`, `thread_id`, `model`, `cost_usd`, and `harness_version` so evals can slice by version.
 
@@ -253,12 +263,15 @@ class Metric(Protocol):
     id: str
     layer: Literal["outcome", "component", "model"]
     kind: Literal["deterministic", "llm_judge", "human"]
+
     async def evaluate(self, trace: Trace, example: Example | None = None) -> Score: ...
 
-class TraceSource(Protocol):            # OTel JSON, Langfuse, S3, AgentCore
+
+class TraceSource(Protocol):  # OTel JSON, Langfuse, S3, AgentCore
     def load(self, filter: TraceFilter) -> AsyncIterator[Trace]: ...
 
-class ResultSink(Protocol):             # S3 (Parquet), Postgres, stdout
+
+class ResultSink(Protocol):  # S3 (Parquet), Postgres, stdout
     async def write(self, results: Sequence[EvalResult]) -> None: ...
 ```
 - Packaging: `kairos-evals` is a pip-installable package (uv). It has no dependency on Kairos internals; the Kairos harness is just one adapter.
@@ -280,7 +293,11 @@ class ResultSink(Protocol):             # S3 (Parquet), Postgres, stdout
 
 ## 5. Data model (initial)
 
-`users, threads, messages, runs, run_steps, tool_calls, approvals, jobs, job_runs, watches, watch_observations, memories (with embedding), notifications, connectors (encrypted tokens), audit_log, eval_runs, eval_results, budgets`
+`users, threads, messages, runs, run_steps, run_events, tool_calls, tool_result_blobs, approvals, jobs, job_runs, watches, watch_observations, memories (with embedding), notifications, connectors (encrypted tokens), audit_log, eval_runs, eval_results, budgets`
+
+- `run_events` is append-only with a monotonic `seq` per run. It feeds SSE resume, the trace viewer and replay.
+- `tool_result_blobs` holds full tool output behind the truncated "read more" handle.
+- `runs` (and later `jobs`) carry lease columns: `lease_id`, `lease_until`, `attempts`.
 
 ---
 
@@ -307,7 +324,7 @@ Worth evaluating in an ADR: **Bedrock AgentCore** (Runtime, Memory, Gateway, Obs
 1. Create the AWS account; enable MFA on root and lock root away.
 2. Set up IAM Identity Center with an admin user for daily use.
 3. Create an AWS Budget with email alerts (start with a low monthly threshold).
-4. Enable Bedrock model access for the Claude models in the chosen region (e.g. `us-east-1` or `ca-central-1`, depending on model availability).
+4. Enable Bedrock model access for the Claude models in the chosen region. As of 2026-11 the current Claude models have no in-region inference in either `us-east-1` or `ca-central-1`; both use cross-region inference profiles. Tentative choice: `ca-central-1` for data at rest with a cross-region profile, to be confirmed with `aws bedrock list-inference-profiles` and recorded as ADR-006 at M8.
 5. Verify a domain in SES and request production access.
 6. Run `cdk bootstrap` and set up the GitHub OIDC role.
 
@@ -317,16 +334,28 @@ Worth evaluating in an ADR: **Bedrock AgentCore** (Runtime, Memory, Gateway, Obs
 
 | # | Milestone | Acceptance criteria |
 |---|---|---|
-| **M0** | Scaffold | uv workspace + `apps/web` (pnpm), `justfile`, CI (ruff, pyright, pytest; Biome, tsc for web), docker compose (Postgres+pgvector, Langfuse), `CLAUDE.md`, ADR-001..003 written |
-| **M1** | Harness core | Async agent loop with streaming, tool registry, Anthropic + Bedrock providers, durable runs with checkpoint/resume, budgets, OTel traces visible in Langfuse. pytest with cassettes |
-| **M2** | API + Chat UI | FastAPI SSE streaming, OpenAPI → generated TS client, Next.js chat with tool cards, threads, run trace viewer. Can ask "what's new in agent evals?" and get a cited answer via web_search + web_fetch |
-| **M3** | Scheduler + watches | Cron/interval/one-shot/watch with leases, DST-safe; NL → job creation with confirmation; Tasks UI with history + value sparkline; fake-clock tests |
-| **M4** | Notify + email + approvals | Email to self (SES/Gmail), web push, policy engine, approval inbox, audit log. Weekly-digest job works end to end |
-| **M5** | Eval framework v1 | `kairos-evals` with workflow, 3-layer metrics, golden datasets (≥50 cases for intent/tool/scheduling), simulator, S3 + dashboard, CI regression gate |
+| **M0** | Scaffold | uv workspace + `apps/web` (pnpm), `justfile`, CI (ruff, pyright, pytest; Biome, tsc for web), docker compose (Postgres+pgvector, Langfuse), `CLAUDE.md`, ADR-001..005 written |
+| **M1** | Harness core | Async agent loop with streaming, tool registry, hooks, Anthropic + Bedrock providers, prompt caching, tool-result truncation, untrusted-content envelope, durable runs with checkpoint/resume on Postgres leases, budgets, OTel traces visible in Langfuse. pytest with cassettes. Thin eval slice: `Trace` model, OTel-JSON trace source and two deterministic metrics in `kairos_evals` |
+| **M2** | API + Chat UI | FastAPI SSE streaming, OpenAPI → generated TS client, Next.js chat with tool cards, threads, run trace viewer, compaction, visible plan checklist. Can ask "what's new in agent evals?" and get a cited answer via web_search + web_fetch. *Built 2026-11-17 (ADR-007, ADR-008). Live check passed 2026-11-17 on Sonnet 5.5: 9/9 citations grounded, $0.07; recorded as an offline eval case.* |
+| **M3** | Scheduler + watches | Cron/interval/one-shot/watch with leases, DST-safe; NL → job creation with confirmation; Tasks UI with history + value sparkline; fake-clock tests. *Built 2026-11-17 (ADR-009); alerts are stored and shown, delivery is M4.* |
+| **M4** | Notify + email + approvals | Email to self (SES/Gmail), web push, policy engine, approval inbox, audit log. Weekly-digest job works end to end. *Decided 2026-11-17 by the owner: email to self via Amazon SES with a send-only IAM policy (revised from a Gmail app password, ADR-010); self-hosted Web Push (VAPID); strict approvals, meaning every agent action with a side effect waits for approval, including email to self and job changes, while system notifications (alerts, digest) are delivered without one; weekly digest Sunday 18:00 America/Toronto. Built 2026-11-17 (ADR-010).* |
+| **M5** | Eval framework v1 | `kairos-evals` with workflow, 3-layer metrics, golden datasets (≥50 cases for intent/tool/scheduling), simulator, S3 + dashboard, CI regression gate. *Decided 2026-11-18 by the owner: datasets LLM-seeded then curated; Sonnet 5.5 as judge; results in Postgres + JSONL now, with the S3 Parquet sink built and tested offline and pointed at a bucket in M8; live spend up to ~$3. Built 2026-11-18 (ADR-011): own metric library (Ragas requires LangChain; DeepEval pulls in analytics and pytest at runtime), 73 curated cases, cached judge and simulator, baseline gate with 1.0 floors on approval gates and injection resistance, Haiku 5.5 comparison for layer 3.* |
 | **M6** | Memory + subagents + browser | pgvector memory with UI, reflection hook, subagents, Playwright browser service, flight + deal adapters; flight-watch scenario passes end to end |
 | **M7** | Hardening | Prompt-injection suite passing, judge calibration, kill switch, rate limits, backups, threat model doc |
 | **M8** | AWS prod | CDK stacks deployed to `dev` then `prod`, Cognito login, alarms, budgets, runbook; online evals sampling prod traces |
 | **M9** | Polish | PWA, ⌘K, mobile layout, onboarding, README with architecture diagrams, demo video script |
+
+### Deferred eval gaps (reviewed against the AWS article on 2026-11-18; revisit later)
+Built in M5 and conforming: the four-step workflow (offline), three metric layers, application-specific metrics, framework-agnostic traces, dashboard and CI gate. Still to do:
+- **Online traces:** sample production traces into the evaluator (M8).
+- **Alerting:** notify on a gate failure or a metric below its floor, through the notification outbox.
+- **Human audits:** a periodic review queue of trace subsets, which also calibrates the judge (M7).
+- **Missing metrics:** response relevance, conciseness, toxicity and harmfulness as judge criteria; goal accuracy; multi-turn function-calling (sequence) accuracy; a reasoning context score.
+- **Failure recovery:** a suite with injected tool failures (errors, malformed output, timeouts, auth failures), scored on coherent recovery.
+- **Tool schema quality:** whether tool definitions themselves cause wrong tool selection.
+- **Real latency:** keep live timings at record time, so model comparisons report true latency.
+- **Comparison adapter:** Bedrock AgentCore Evaluations.
+- **After M6 lands:** memory metrics (context retrieval precision and recall) and multi-agent metrics.
 
 ### Signature end-to-end scenarios (also used as eval cases)
 1. "Watch Toronto → Coimbatore round-trip fares for Dec 10–20, alert me under $X CAD, check every 6 hours" → watch created → observations stored → one alert on drop, no duplicates.
@@ -343,7 +372,7 @@ Worth evaluating in an ADR: **Bedrock AgentCore** (Runtime, Memory, Gateway, Obs
 - **Ruff** for lint and format; **pyright strict** (or mypy strict) with full type hints and no untyped defs.
 - **Pydantic v2** at every boundary (API, tools, events, config via `pydantic-settings`).
 - Async throughout (FastAPI, asyncpg, httpx). No blocking calls in the event loop.
-- **pytest** + pytest-asyncio; `vcrpy`/`pytest-recording` for cassettes; `time-machine` for the fake clock; `testcontainers` Postgres for integration tests.
+- **pytest** + pytest-asyncio; provider-boundary cassettes for model calls and `vcrpy`/`pytest-recording` for plain-HTTP tools (ADR-005); `time-machine` for the fake clock; `testcontainers` Postgres for integration tests.
 - Structured logging with `structlog`, correlated with OTel trace IDs.
 
 **TypeScript (web UI only)**

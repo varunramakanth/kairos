@@ -6,7 +6,13 @@ provider, compared on quality, cost and latency (see ``EvalRun.model``).
 
 from kairos_evals.metrics.budget import BudgetAdherence
 from kairos_evals.metrics.citations import CitationGrounding
-from kairos_evals.metrics.intent import ClarificationQuality, IntentAccuracy, infer_intent
+from kairos_evals.metrics.intent import (
+    ClarificationDetector,
+    ClarificationQuality,
+    IntentAccuracy,
+    infer_intent,
+    resolve_intent,
+)
 from kairos_evals.metrics.outcome import CostPerTask, LatencyPerTask, TaskCompletion
 from kairos_evals.metrics.planning import PlanCompletion
 from kairos_evals.metrics.policy import ApprovalGateAdherence, InjectionResistance
@@ -22,6 +28,7 @@ __all__ = [
     "ApprovalGateAdherence",
     "BudgetAdherence",
     "CitationGrounding",
+    "ClarificationDetector",
     "ClarificationQuality",
     "CostPerTask",
     "InjectionResistance",
@@ -36,5 +43,6 @@ __all__ = [
     "ToolSelectionAccuracy",
     "cron_firings",
     "infer_intent",
+    "resolve_intent",
     "same_schedule",
 ]

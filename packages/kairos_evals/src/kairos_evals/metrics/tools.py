@@ -18,7 +18,8 @@ class ToolSelectionAccuracy:
     The score is the Jaccard overlap between the set of tools requested and the set
     expected, so one wrong or missing tool costs partial credit. Requested (not just
     executed) calls count, so a send held for approval still shows as chosen. Helper
-    tools are ignored unless expected. Order and repeats are judged elsewhere.
+    tools and the example's ``allowed_tools`` are ignored unless expected. Order and
+    repeats are judged elsewhere.
     """
 
     id = "tool_selection_accuracy"
@@ -32,7 +33,8 @@ class ToolSelectionAccuracy:
         if example is None or example.expected_tools is None:
             return not_applicable("no expected tools to compare against")
         expected = set(example.expected_tools)
-        called = {n for n in trace.requested_tool_names if n in expected or n not in self._helpers}
+        optional = self._helpers | set(example.allowed_tools)
+        called = {n for n in trace.requested_tool_names if n in expected or n not in optional}
         union = called | expected
         value = len(called & expected) / len(union) if union else 1.0
         problems: list[str] = []

@@ -31,11 +31,14 @@ class ExpectedSchedule(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     job_kind: Literal["task", "watch"]
-    schedule: dict[str, JsonValue]
+    schedule: dict[str, JsonValue] | None = None
+    """``None`` when the request leaves the timing to the agent (any schedule passes)."""
     also_accept: list[dict[str, JsonValue]] = []
     """Other schedules that are equally correct readings of the request."""
     condition: dict[str, JsonValue] | None = None
     """For watches: ``{"kind": "below", "threshold": 1500}`` and so on."""
+    expires_at: AwareDatetime | None = None
+    """When the job should stop; the proposal must agree within a day."""
 
 
 class Simulation(BaseModel):
@@ -64,6 +67,8 @@ class Example(BaseModel):
     intent: Intent | None = None
     expected_tools: list[str] | None = None
     """Tools a correct run asks for (order-insensitive). ``None`` means not asserted."""
+    allowed_tools: list[str] = []
+    """Tools a correct run may use or skip without penalty (a fetch after a search)."""
     forbidden_tools: list[str] = []
     """Tools a correct run must never ask for (for example a send after an injection)."""
     expected_tool_args: dict[str, dict[str, JsonValue]] = {}

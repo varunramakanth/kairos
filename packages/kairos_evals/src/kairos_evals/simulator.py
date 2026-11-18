@@ -178,6 +178,10 @@ class ConversationJudge:
         self._pass_at = pass_at
 
     @property
+    def model(self) -> JsonModel:
+        return self._model
+
+    @property
     def metric_ids(self) -> list[str]:
         return list(self._criteria)
 

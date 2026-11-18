@@ -282,3 +282,22 @@ def test_cli_lists_its_commands() -> None:
     assert result.exit_code == 0
     assert "run" in result.output
     assert "report" in result.output
+
+
+async def test_clarification_detector_decides_tool_less_replies_only() -> None:
+    from kairos_evals.metrics import ClarificationDetector, ClarificationQuality, IntentAccuracy
+
+    model = FakeModel([{"reason": "asks which product", "asks_for_clarification": True}])
+    detector = ClarificationDetector(model)
+    vague = Example(id="v", input="watch the price", intent="clarify")
+    no_question_mark = make_trace(
+        input="watch the price", answer="Tell me the product and threshold and I'll set it up."
+    )
+    assert (await IntentAccuracy(detector).evaluate(no_question_mark, vague)).passed
+    assert (await ClarificationQuality(detector).evaluate(no_question_mark, vague)).passed
+    assert len(model.prompts) == 1  # memoized per trace
+    researched = make_trace(trace_id="t2", requested=[("web_search", {})], answer="Which one?")
+    assert (await IntentAccuracy(detector).evaluate(researched, vague)).details["got"] == "research"
+    assert len(model.prompts) == 1  # tools settled it; no model call
+    assert IntentAccuracy(detector).kind == "llm_judge"
+    assert IntentAccuracy().kind == "deterministic"

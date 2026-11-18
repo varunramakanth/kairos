@@ -103,7 +103,8 @@ class ScheduleCorrectness:
     watch, alerts on the right condition.
 
     Reads the last ``schedule_create`` call. The score is the share of checks
-    passed (kind, schedule, and condition when expected); it passes when all do.
+    passed (kind, then schedule, condition and expiry when expected); it passes
+    when all do.
     """
 
     id = "schedule_correctness"
@@ -131,14 +132,24 @@ class ScheduleCorrectness:
         checks.append((kind == expected.job_kind, f"kind {kind} vs {expected.job_kind}"))
 
         schedule = args.get("schedule")
-        if isinstance(schedule, dict):
+        if not isinstance(schedule, dict):
+            checks.append((False, "no schedule in the call"))
+        elif expected.schedule is not None:
             outcomes = [
                 same_schedule(option, schedule, now=now)
                 for option in (expected.schedule, *expected.also_accept)
             ]
             checks.append(next((o for o in outcomes if o[0]), outcomes[0]))
-        else:
-            checks.append((False, "no schedule in the call"))
+
+        if expected.expires_at is not None:
+            expires = _instant(args.get("expires_at"))
+            ok = (
+                expires is not None
+                and abs((expires - expected.expires_at).total_seconds()) <= 86_400
+            )
+            checks.append(
+                (ok, f"expires {args.get('expires_at')} vs {expected.expires_at.isoformat()}")
+            )
 
         if expected.condition is not None:
             watch = args.get("watch")

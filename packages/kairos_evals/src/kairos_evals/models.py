@@ -77,7 +77,8 @@ class AnthropicJsonModel:
             else AssistantMessageParam(role="assistant", content=m.content)
             for m in messages
         ]
-        response = await self._client.messages.create(
+        # Streamed so long answers (large max_tokens) never hit the request timeout.
+        async with self._client.messages.stream(
             model=self._model,
             max_tokens=self._max_tokens,
             system=system,
@@ -85,7 +86,8 @@ class AnthropicJsonModel:
             output_config=cast(
                 Any, {"effort": self._effort, "format": {"type": "json_schema", "schema": schema}}
             ),
-        )
+        ) as stream:
+            response = await stream.get_final_message()
         self.calls += 1
         price_in, price_out = PRICES_PER_MTOK.get(self._model, (0.0, 0.0))
         usage = response.usage
@@ -127,6 +129,11 @@ class ModelCassette:
     @property
     def name(self) -> str:
         return self._model
+
+    @property
+    def cost_usd(self) -> float:
+        """What the live model has cost so far in this process (0 when replaying)."""
+        return float(getattr(self._live, "cost_usd", 0.0))
 
     def key(self, system: str, messages: Sequence[ChatMessage], schema: dict[str, Any]) -> str:
         payload = {

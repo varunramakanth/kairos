@@ -40,6 +40,7 @@ from kairos_tools.mcp import McpServerConfig, McpToolPolicy
 from kairos_tools.plan import plan_tool
 from kairos_tools.subagent import delegate_tool
 from kairos_tools.web import web_fetch_tool, web_search_tool
+from kairos_worker.online import OnlineEvals
 from kairos_worker.settings import Settings
 
 log = structlog.get_logger(__name__)
@@ -204,6 +205,7 @@ class Runtime:
     tools: ToolExecutor
     hooks: Hooks | None = None
     screen: ContentScreen | None = None
+    online: OnlineEvals | None = None
 
     def loop(self, checkpointer: Checkpointer) -> AgentLoop:
         config = LoopConfig(compact_at_prompt_tokens=self.settings.compact_at_prompt_tokens)

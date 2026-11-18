@@ -57,6 +57,11 @@ class Settings(BaseSettings):
     daily_spend_cap_usd: float | None = Field(default=5.0, gt=0)
     """Model spend per local day (``timezone``) after which runs and job firings stop
     until midnight, and the owner is notified once. Unset for no cap."""
+    # --- deployment (M8) -------------------------------------------------------------
+    online_evals: bool = True
+    """Score every finished run with label-free metrics; written as the ``online`` suite."""
+    online_evals_flush_seconds: float = Field(default=6 * 3600, gt=0)
+    """How often collected scores are written (and once more on shutdown)."""
     injection_screening: Literal["model", "patterns", "off"] = "model"
     """Screen untrusted tool output: patterns always, and with ``model`` the job model
     decides pattern matches (a fraction of a cent each). ``patterns`` flags every match."""

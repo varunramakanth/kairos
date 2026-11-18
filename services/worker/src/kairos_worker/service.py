@@ -6,7 +6,8 @@ from contextlib import AsyncExitStack, asynccontextmanager
 from importlib.metadata import version
 
 import structlog
-from opentelemetry.sdk.trace import TracerProvider
+from opentelemetry.sdk.trace import SpanProcessor, TracerProvider
+from opentelemetry.sdk.trace.export import SimpleSpanProcessor
 from sqlalchemy.ext.asyncio import AsyncEngine
 
 from kairos_db import EventPublisher, JobStore, Lease, RunQueue
@@ -15,6 +16,7 @@ from kairos_db.memories import MemoryStore
 from kairos_db.spend import SpendLedger
 from kairos_domain.governance import ApprovalStatus
 from kairos_domain.jobs import JobStatus
+from kairos_evals import PostgresSink
 from kairos_harness import Clock, HookChain, Hooks, Provider, RunContext, SystemClock
 from kairos_memory.reflection import ReflectionHooks
 from kairos_notify import (
@@ -32,6 +34,7 @@ from kairos_telemetry import TracingHooks, configure_tracing
 from kairos_tools.mcp import open_toolsets
 from kairos_worker.audit import AuditHooks
 from kairos_worker.backup import nightly
+from kairos_worker.online import OnlineEvals
 from kairos_worker.settings import Settings
 from kairos_worker.spend import SpendCap, SpendCapHooks
 from kairos_worker.wiring import (
@@ -56,11 +59,14 @@ def parse_headers(raw: str) -> dict[str, str]:
     return {key.strip(): value.strip() for key, value in pairs}
 
 
-def tracing(settings: Settings, provider: Provider) -> tuple[TracerProvider, TracingHooks]:
+def tracing(
+    settings: Settings, provider: Provider, *, processors: tuple[SpanProcessor, ...] = ()
+) -> tuple[TracerProvider, TracingHooks]:
     tracer_provider = configure_tracing(
         service_version=HARNESS_VERSION,
         otlp_endpoint=settings.otlp_endpoint,
         otlp_headers=parse_headers(settings.otlp_headers),
+        processors=processors,
     )
     hooks = TracingHooks(
         tracer_provider.get_tracer("kairos"),
@@ -83,7 +89,19 @@ async def open_runtime(
     With an ``engine`` the agent also gets the schedule tools.
     """
     provider = provider or build_provider(settings)
-    tracer_provider, tracing_hooks = tracing(settings, provider)
+    online = (
+        OnlineEvals(
+            PostgresSink(engine),
+            now=(clock or SystemClock()).now,
+            harness_version=HARNESS_VERSION,
+            model=settings.model,
+        )
+        if engine is not None and settings.online_evals
+        else None
+    )
+    # Online evals read the spans as each one ends (in memory, on the event loop).
+    processors = (SimpleSpanProcessor(online.collector),) if online else ()
+    tracer_provider, tracing_hooks = tracing(settings, provider, processors=processors)
     async with http_client() as http, AsyncExitStack() as stack:
         try:
             memories = memory_store(settings, engine) if engine is not None else None
@@ -123,7 +141,7 @@ async def open_runtime(
             chain = HookChain([*hooks, tracing_hooks])
             screen = build_screen(settings, provider)
             add_delegate(tools, settings, provider, hooks=chain, clock=clock, screen=screen)
-            yield Runtime(settings, provider, tools, chain, screen)
+            yield Runtime(settings, provider, tools, chain, screen, online)
         finally:
             tracer_provider.shutdown()
 
@@ -237,6 +255,12 @@ async def work(
             )
             group.create_task(dispatcher.run_forever(stop))
             group.create_task(backfill_memories(memory_store(settings, engine)))
+            if runtime.online is not None:
+                group.create_task(
+                    runtime.online.run_forever(
+                        stop, flush_seconds=settings.online_evals_flush_seconds
+                    )
+                )
             if settings.backups:
                 group.create_task(
                     nightly(

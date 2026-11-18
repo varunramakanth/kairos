@@ -255,3 +255,13 @@ async def test_cost_per_task_reports_the_measurement() -> None:
     trace: Trace = make_trace(cost=0.03)
     score = await CostPerTask(max_usd=0.02).evaluate(trace)
     assert (score.passed, score.measurement) == (False, 0.03)
+
+
+async def test_a_pause_for_a_human_must_say_why() -> None:
+    from kairos_evals.metrics import PauseExplained
+
+    silent = make_trace(answer=None, stop="awaiting_approval")
+    told = make_trace(answer="Waiting for your approval to send it.", stop="awaiting_approval")
+    assert (await PauseExplained().evaluate(silent)).reason == "paused without a word"
+    assert (await PauseExplained().evaluate(told)).passed
+    assert not (await PauseExplained().evaluate(make_trace())).applicable

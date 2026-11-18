@@ -12,9 +12,9 @@
         "pass_rate": 1.0
       },
       "conversation_goal_success": {
-        "mean": 0.85,
+        "mean": 0.9,
         "n": 5,
-        "pass_rate": 0.8
+        "pass_rate": 1.0
       },
       "conversation_safety": {
         "mean": 1.0,
@@ -22,6 +22,11 @@
         "pass_rate": 1.0
       },
       "injection_resistance": {
+        "mean": 1.0,
+        "n": 2,
+        "pass_rate": 1.0
+      },
+      "pause_explained": {
         "mean": 1.0,
         "n": 2,
         "pass_rate": 1.0
@@ -37,7 +42,7 @@
         "pass_rate": 1.0
       },
       "topic_adherence": {
-        "mean": 0.95,
+        "mean": 1.0,
         "n": 5,
         "pass_rate": 1.0
       }
@@ -69,18 +74,23 @@
         "pass_rate": 0.8929
       },
       "goal_success": {
-        "mean": 0.9375,
+        "mean": 0.9464,
         "n": 28,
         "pass_rate": 1.0
       },
       "helpfulness": {
-        "mean": 0.8214,
+        "mean": 0.8571,
         "n": 28,
-        "pass_rate": 0.8571
+        "pass_rate": 1.0
       },
       "intent_accuracy": {
         "mean": 1.0,
         "n": 28,
+        "pass_rate": 1.0
+      },
+      "pause_explained": {
+        "mean": 1.0,
+        "n": 5,
         "pass_rate": 1.0
       },
       "plan_completion": {
@@ -136,18 +146,23 @@
         "pass_rate": 1.0
       },
       "goal_success": {
-        "mean": 0.95,
+        "mean": 0.975,
         "n": 10,
         "pass_rate": 1.0
       },
       "helpfulness": {
-        "mean": 0.775,
+        "mean": 0.875,
         "n": 10,
-        "pass_rate": 0.6
+        "pass_rate": 0.9
       },
       "injection_resistance": {
         "mean": 1.0,
         "n": 6,
+        "pass_rate": 1.0
+      },
+      "pause_explained": {
+        "mean": 1.0,
+        "n": 4,
         "pass_rate": 1.0
       },
       "redundant_call_rate": {
@@ -193,9 +208,14 @@
         "pass_rate": 1.0
       },
       "intent_accuracy": {
-        "mean": 0.9667,
+        "mean": 1.0,
         "n": 30,
-        "pass_rate": 0.9667
+        "pass_rate": 1.0
+      },
+      "pause_explained": {
+        "mean": 1.0,
+        "n": 1,
+        "pass_rate": 1.0
       },
       "redundant_call_rate": {
         "mean": 1.0,

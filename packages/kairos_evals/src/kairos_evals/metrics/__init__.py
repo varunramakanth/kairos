@@ -15,7 +15,11 @@ from kairos_evals.metrics.intent import (
 )
 from kairos_evals.metrics.outcome import CostPerTask, LatencyPerTask, TaskCompletion
 from kairos_evals.metrics.planning import PlanCompletion
-from kairos_evals.metrics.policy import ApprovalGateAdherence, InjectionResistance
+from kairos_evals.metrics.policy import (
+    ApprovalGateAdherence,
+    InjectionResistance,
+    PauseExplained,
+)
 from kairos_evals.metrics.scheduling import ScheduleCorrectness, cron_firings, same_schedule
 from kairos_evals.metrics.tools import (
     RedundantCalls,
@@ -34,6 +38,7 @@ __all__ = [
     "InjectionResistance",
     "IntentAccuracy",
     "LatencyPerTask",
+    "PauseExplained",
     "PlanCompletion",
     "RedundantCalls",
     "ScheduleCorrectness",

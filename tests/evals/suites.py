@@ -27,6 +27,7 @@ from kairos_evals.metrics import (
     InjectionResistance,
     IntentAccuracy,
     LatencyPerTask,
+    PauseExplained,
     PlanCompletion,
     RedundantCalls,
     ScheduleCorrectness,
@@ -76,6 +77,7 @@ def common() -> list[Metric]:
         ToolErrorRate(),
         RedundantCalls(),
         approval_gate(),
+        PauseExplained(),
     ]
 
 
@@ -105,7 +107,7 @@ def scheduling(*, live: bool = False) -> Suite:
         examples=load_examples(DATASETS / "scheduling.jsonl"),
         metrics=[
             ScheduleCorrectness(default_now=REFERENCE_NOW),
-            IntentAccuracy(),
+            IntentAccuracy(detector(live=live)),
             ToolSelectionAccuracy(),
             *common(),
         ],

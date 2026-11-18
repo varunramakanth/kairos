@@ -7,6 +7,7 @@ from pydantic import AliasChoices, Field, SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from kairos_domain.governance import ChannelName
+from kairos_tools.mcp import McpServerConfig
 
 
 class Settings(BaseSettings):
@@ -42,6 +43,14 @@ class Settings(BaseSettings):
         default=None, validation_alias=AliasChoices("TAVILY_API_KEY", "KAIROS_TAVILY_API_KEY")
     )
     """Enables ``web_search``. Without it the tool is not offered to the model."""
+
+    # --- browser and MCP (M6) -------------------------------------------------------
+    browser: bool = False
+    """Offer the isolated browser (``browser_*`` tools) through its MCP server. Needs
+    Chromium: ``uv run playwright install chromium``."""
+    mcp_servers: list[McpServerConfig] = []
+    """Extra MCP servers, as JSON. Their tools need approval and their output is treated
+    as untrusted unless a server's ``tools`` entry says otherwise."""
 
     # --- notifications (M4) ---------------------------------------------------------
     email_provider: Literal["ses", "smtp"] | None = None

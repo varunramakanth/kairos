@@ -2,7 +2,7 @@
 
 import asyncio
 from collections.abc import AsyncGenerator
-from contextlib import asynccontextmanager
+from contextlib import AsyncExitStack, asynccontextmanager
 from importlib.metadata import version
 
 import structlog
@@ -26,9 +26,10 @@ from kairos_policy import PolicyHooks
 from kairos_scheduler.scheduler import DIGEST_JOB_ID, Scheduler, digest_spec
 from kairos_scheduler.timing import next_fire
 from kairos_telemetry import TracingHooks, configure_tracing
+from kairos_tools.mcp import open_toolsets
 from kairos_worker.audit import AuditHooks
 from kairos_worker.settings import Settings
-from kairos_worker.wiring import Runtime, build_provider, build_tools, http_client
+from kairos_worker.wiring import Runtime, build_provider, build_tools, http_client, mcp_configs
 from kairos_worker.worker import Worker
 
 HARNESS_VERSION = version("kairos-harness")
@@ -69,11 +70,10 @@ async def open_runtime(
     """
     provider = provider or build_provider(settings)
     tracer_provider, tracing_hooks = tracing(settings, provider)
-    async with http_client() as http:
+    async with http_client() as http, AsyncExitStack() as stack:
         try:
             if engine is None:
                 tools = build_tools(settings, http, clock=clock)
-                hooks: list[Hooks] = [PolicyHooks()]
             else:
                 notifications = NotificationStore(engine)
                 tools = build_tools(
@@ -83,10 +83,19 @@ async def open_runtime(
                     notify=lambda n, key: notifications.enqueue(n, dedupe_key=key),
                     clock=clock,
                 )
-                hooks = [
+            # MCP tools (the browser, configured servers) come after the built-ins, and
+            # before the hooks, which read every tool's risk.
+            for toolset in await open_toolsets(stack, mcp_configs(settings)):
+                for item in toolset.tools:
+                    tools.register(item)
+            hooks: list[Hooks] = (
+                [PolicyHooks()]
+                if engine is None
+                else [
                     PolicyHooks(actions_enabled=SettingsStore(engine).actions_enabled),
                     AuditHooks(AuditStore(engine), tools.specs()),
                 ]
+            )
             # Policy first (its decision wins), tracing last (it sees the final state).
             yield Runtime(settings, provider, tools, HookChain([*hooks, tracing_hooks]))
         finally:

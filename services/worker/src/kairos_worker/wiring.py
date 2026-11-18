@@ -1,5 +1,6 @@
 """Builds concrete objects from settings. The only place that knows every package."""
 
+import sys
 from dataclasses import dataclass
 
 import httpx2
@@ -7,6 +8,7 @@ import structlog
 from sqlalchemy.ext.asyncio import AsyncEngine
 
 from kairos_db import Lease, PostgresCheckpointer
+from kairos_domain.tools import ToolRisk
 from kairos_harness import (
     AgentLoop,
     Checkpointer,
@@ -24,6 +26,7 @@ from kairos_scheduler.protocols import JobRepository
 from kairos_scheduler.tools import record_observation_tool, schedule_tools
 from kairos_tools import ToolRegistry
 from kairos_tools.builtin import current_time_tool
+from kairos_tools.mcp import McpServerConfig, McpToolPolicy
 from kairos_tools.plan import plan_tool
 from kairos_tools.web import web_fetch_tool, web_search_tool
 from kairos_worker.settings import Settings
@@ -47,6 +50,31 @@ def http_client() -> httpx2.AsyncClient:
     """The client for HTTP tools. Redirects are followed by ``web_fetch`` itself, so it
     can check each hop."""
     return httpx2.AsyncClient(follow_redirects=False)
+
+
+def _browser_policies() -> dict[str, McpToolPolicy]:
+    read = McpToolPolicy(risk=ToolRisk.READ, idempotent=True)
+    act = McpToolPolicy(risk=ToolRisk.WRITE_EXTERNAL)
+    return {
+        **dict.fromkeys(("navigate", "snapshot", "extract", "click", "search"), read),
+        **dict.fromkeys(("type", "press"), act),
+    }
+
+
+BROWSER_SERVER = McpServerConfig(
+    name="browser",
+    command=sys.executable,
+    args=["-m", "kairos_browser.server"],
+    tools=_browser_policies(),
+    timeout_seconds=45.0,
+)
+"""The browser service (ADR-012): reading is allowed, typing and pressing need approval,
+and every page is untrusted content."""
+
+
+def mcp_configs(settings: Settings) -> list[McpServerConfig]:
+    """MCP servers to connect, in a fixed order (tool order is part of the prompt cache)."""
+    return [*([BROWSER_SERVER] if settings.browser else []), *settings.mcp_servers]
 
 
 def build_tools(

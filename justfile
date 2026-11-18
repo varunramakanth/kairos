@@ -11,6 +11,7 @@ default:
 # Install Python and web dependencies
 sync:
     uv sync --all-packages --all-extras
+    uv run playwright install chromium
     # macOS can flag files in iCloud-synced folders as hidden, and Python 3.13 skips
     # hidden .pth files, which breaks editable installs (see CLAUDE.md).
     @if [ "$(uname)" = "Darwin" ]; then chflags -R nohidden .venv; fi

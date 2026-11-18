@@ -123,5 +123,21 @@ gen-client:
     uv run python -m kairos_api.openapi apps/web/openapi.json
     pnpm --dir apps/web gen-client
 
+# AWS (M8, docs/runbook.md). Settings come from infra/cdk/cdk.context.json or -c flags.
+# The AWS keys in .env (SES only) are dropped so only the named admin profile is used.
+cdk_cli := "env -u AWS_ACCESS_KEY_ID -u AWS_SECRET_ACCESS_KEY -u AWS_SESSION_TOKEN npx -y aws-cdk@2.1148.1"
+
+# Synthesize the CloudFormation template (no changes in AWS)
+synth profile *args:
+    cd infra/cdk && {{ cdk_cli }} synth --profile {{ profile }} {{ args }}
+
+# Show what a deploy would change
+cdk-diff profile *args:
+    cd infra/cdk && {{ cdk_cli }} diff --profile {{ profile }} {{ args }}
+
+# Deploy the production stack. Creates billable AWS resources; see the runbook first
+deploy profile *args:
+    cd infra/cdk && {{ cdk_cli }} deploy --profile {{ profile }} --require-approval broadening {{ args }}
+
 # Everything CI runs
 check: lint typecheck test evals

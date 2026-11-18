@@ -9,7 +9,7 @@ dependencies = []
 package = false
 
 [tool.uv.workspace]
-members = ["packages/*", "services/*"]
+members = ["packages/*", "services/*", "infra/cdk"]
 
 [dependency-groups]
 dev = [
@@ -64,12 +64,12 @@ ban-relative-imports = "all"
 [tool.pyright]
 typeCheckingMode = "strict"
 pythonVersion = "3.12"
-include = ["packages", "services", "tests"]
+include = ["packages", "services", "tests", "infra/cdk"]
 venvPath = "."
 venv = ".venv"
 
 [tool.pytest.ini_options]
-testpaths = ["tests", "packages", "services"]
+testpaths = ["tests", "packages", "services", "infra/cdk"]
 addopts = "-ra --strict-markers --import-mode=importlib --allow-hosts=127.0.0.1,::1,localhost --allow-unix-socket"
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"

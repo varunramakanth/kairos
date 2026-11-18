@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  Brain,
   CalendarClock,
   FlaskConical,
   Inbox,
@@ -88,6 +89,16 @@ export function ThreadSidebar() {
         >
           <CalendarClock className="size-3.5 text-muted-foreground" />
           Tasks &amp; watches
+        </Link>
+        <Link
+          href="/memory"
+          className={cn(
+            "flex items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-muted",
+            pathname.startsWith("/memory") && "bg-muted font-medium",
+          )}
+        >
+          <Brain className="size-3.5 text-muted-foreground" />
+          Memory
         </Link>
         <Link
           href="/evals"

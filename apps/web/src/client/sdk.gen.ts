@@ -2,7 +2,7 @@
 
 import type { Client, ClientMeta, Options as Options2, RequestResult, ServerSentEventsResult, TDataShape } from './client';
 import { client } from './client.gen';
-import type { ConfirmJobData, ConfirmJobErrors, ConfirmJobResponses, CreateJobData, CreateJobErrors, CreateJobResponses, CreateThreadData, CreateThreadErrors, CreateThreadResponses, DecideApprovalData, DecideApprovalErrors, DecideApprovalResponses, GetBlobData, GetBlobErrors, GetBlobResponses, GetEvalRunData, GetEvalRunErrors, GetEvalRunResponses, GetJobData, GetJobErrors, GetJobResponses, GetRunData, GetRunErrors, GetRunMessagesData, GetRunMessagesErrors, GetRunMessagesResponses, GetRunResponses, GetSettingsData, GetSettingsResponses, GetThreadData, GetThreadErrors, GetThreadResponses, HealthData, HealthResponses, ListApprovalsData, ListApprovalsErrors, ListApprovalsResponses, ListAuditData, ListAuditErrors, ListAuditResponses, ListEvalRunsData, ListEvalRunsErrors, ListEvalRunsResponses, ListJobsData, ListJobsResponses, ListNotificationsData, ListNotificationsResponses, ListThreadsData, ListThreadsResponses, PauseAllJobsData, PauseAllJobsResponses, RunApprovalsData, RunApprovalsErrors, RunApprovalsResponses, RunJobNowData, RunJobNowErrors, RunJobNowResponses, SendMessageData, SendMessageErrors, SendMessageResponses, SendTestNotificationData, SendTestNotificationErrors, SendTestNotificationResponses, SetKillSwitchData, SetKillSwitchErrors, SetKillSwitchResponses, StreamRunEventsData, StreamRunEventsErrors, StreamRunEventsResponses, SubscribePushData, SubscribePushErrors, SubscribePushResponses, UnsubscribePushData, UnsubscribePushErrors, UnsubscribePushResponses, UpdateJobData, UpdateJobErrors, UpdateJobResponses } from './types.gen';
+import type { ConfirmJobData, ConfirmJobErrors, ConfirmJobResponses, CreateJobData, CreateJobErrors, CreateJobResponses, CreateMemoryData, CreateMemoryErrors, CreateMemoryResponses, CreateThreadData, CreateThreadErrors, CreateThreadResponses, DecideApprovalData, DecideApprovalErrors, DecideApprovalResponses, DeleteMemoryData, DeleteMemoryErrors, DeleteMemoryResponses, GetBlobData, GetBlobErrors, GetBlobResponses, GetEvalRunData, GetEvalRunErrors, GetEvalRunResponses, GetJobData, GetJobErrors, GetJobResponses, GetRunData, GetRunErrors, GetRunMessagesData, GetRunMessagesErrors, GetRunMessagesResponses, GetRunResponses, GetSettingsData, GetSettingsResponses, GetThreadData, GetThreadErrors, GetThreadResponses, HealthData, HealthResponses, ListApprovalsData, ListApprovalsErrors, ListApprovalsResponses, ListAuditData, ListAuditErrors, ListAuditResponses, ListEvalRunsData, ListEvalRunsErrors, ListEvalRunsResponses, ListJobsData, ListJobsResponses, ListMemoriesData, ListMemoriesErrors, ListMemoriesResponses, ListNotificationsData, ListNotificationsResponses, ListThreadsData, ListThreadsResponses, PauseAllJobsData, PauseAllJobsResponses, RunApprovalsData, RunApprovalsErrors, RunApprovalsResponses, RunJobNowData, RunJobNowErrors, RunJobNowResponses, SendMessageData, SendMessageErrors, SendMessageResponses, SendTestNotificationData, SendTestNotificationErrors, SendTestNotificationResponses, SetKillSwitchData, SetKillSwitchErrors, SetKillSwitchResponses, StreamRunEventsData, StreamRunEventsErrors, StreamRunEventsResponses, SubscribePushData, SubscribePushErrors, SubscribePushResponses, UnsubscribePushData, UnsubscribePushErrors, UnsubscribePushResponses, UpdateJobData, UpdateJobErrors, UpdateJobResponses, UpdateMemoryData, UpdateMemoryErrors, UpdateMemoryResponses } from './types.gen';
 
 export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends boolean = boolean, TResponse = unknown> = Options2<TData, ThrowOnError, TResponse> & {
     /**
@@ -173,6 +173,46 @@ export const decideApproval = <ThrowOnError extends boolean = false>(options: Op
  * List Audit
  */
 export const listAudit = <ThrowOnError extends boolean = false>(options?: Options<ListAuditData, ThrowOnError>): RequestResult<ListAuditResponses, ListAuditErrors, ThrowOnError> => (options?.client ?? client).get<ListAuditResponses, ListAuditErrors, ThrowOnError>({ url: '/audit', ...options });
+
+/**
+ * List Memories
+ *
+ * Newest first; with ``q``, the active memories that match it, best first.
+ */
+export const listMemories = <ThrowOnError extends boolean = false>(options?: Options<ListMemoriesData, ThrowOnError>): RequestResult<ListMemoriesResponses, ListMemoriesErrors, ThrowOnError> => (options?.client ?? client).get<ListMemoriesResponses, ListMemoriesErrors, ThrowOnError>({ url: '/memories', ...options });
+
+/**
+ * Create Memory
+ *
+ * A memory written by the user: active at once.
+ */
+export const createMemory = <ThrowOnError extends boolean = false>(options: Options<CreateMemoryData, ThrowOnError>): RequestResult<CreateMemoryResponses, CreateMemoryErrors, ThrowOnError> => (options.client ?? client).post<CreateMemoryResponses, CreateMemoryErrors, ThrowOnError>({
+    url: '/memories',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Delete Memory
+ */
+export const deleteMemory = <ThrowOnError extends boolean = false>(options: Options<DeleteMemoryData, ThrowOnError>): RequestResult<DeleteMemoryResponses, DeleteMemoryErrors, ThrowOnError> => (options.client ?? client).delete<DeleteMemoryResponses, DeleteMemoryErrors, ThrowOnError>({ url: '/memories/{memory_id}', ...options });
+
+/**
+ * Update Memory
+ *
+ * Edit or re-classify a memory, or confirm a proposal (``status: active``).
+ */
+export const updateMemory = <ThrowOnError extends boolean = false>(options: Options<UpdateMemoryData, ThrowOnError>): RequestResult<UpdateMemoryResponses, UpdateMemoryErrors, ThrowOnError> => (options.client ?? client).patch<UpdateMemoryResponses, UpdateMemoryErrors, ThrowOnError>({
+    url: '/memories/{memory_id}',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
 
 /**
  * List Eval Runs

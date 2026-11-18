@@ -38,11 +38,14 @@ api:
     KAIROS_EMBEDDED_WORKER=1 uv run uvicorn --factory kairos_api.app:create_app --port 8000 \
       --reload --reload-dir packages --reload-dir services
 
-# Same, but the model is a scripted demo cassette: no API key, no cost
+# Same, but the model is a scripted demo (tests/e2e/demo.py): no API key, no cost.
+# Email, push, web search and the browser are off, whatever .env says.
 api-demo:
-    KAIROS_EMBEDDED_WORKER=1 KAIROS_PROVIDER=replay KAIROS_MODEL=claude-opus-5-5 \
-      KAIROS_REPLAY_CASSETTE=tests/e2e/cassettes/demo.jsonl TAVILY_API_KEY= \
-      uv run uvicorn --factory kairos_api.app:create_app --port 8000
+    uv run python -m tests.e2e.demo serve
+
+# Re-record the demo cassette after a prompt or tool change (free, no network)
+record-demo:
+    uv run python -m tests.e2e.demo
 
 # Format Python and web code
 fmt:

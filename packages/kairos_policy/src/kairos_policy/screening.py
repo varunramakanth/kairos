@@ -16,6 +16,8 @@ the agent, with a warning, so the agent can tell the user what the page tried; t
 strict approval policy remains the hard stop for any action.
 """
 
+import base64
+import binascii
 import json
 import re
 import unicodedata
@@ -48,6 +50,14 @@ PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = tuple(
             r"\b(system|developer|admin(istrator)?)\s+(message|notice|instruction|override|prompt)\b|^\s*(system|assistant)\s*:",
         ),
         ("fake authority", r"\b(you are now|from now on you|your new (instructions|role|task))\b"),
+        # Uppercase only: "camera system: 50 MP" is a spec sheet, "SYSTEM:" is role-play.
+        ("fake authority", r"(?-i:\bSYSTEM\s*:)|\bnew (instructions?|task) (from|for)\b"),
+        (
+            "addressed to AI",
+            r"\b(assistants?|agents?)\s*[:,]\s*(do|call|use|fetch|send|ignore|include|decode|quietly|look)\b",
+        ),
+        ("addressed to AI", r"\byour (ai )?(assistant|agent) (must|should|needs to|has to)\b"),
+        ("encoded instructions", r"\bdecode\b.{0,20}\b(and )?(follow|execute|run|obey)\b"),
         (
             "concealment",
             r"\b(do not|don't|never)\s+(tell|inform|mention|reveal)\b.{0,30}\b(user|owner|human)\b",
@@ -62,7 +72,8 @@ PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = tuple(
         ),
         (
             "exfiltration",
-            r"\b(send|email|forward|post|upload)\b.{0,60}"
+            # "Email or phone number ... Password" is a login form, not an instruction.
+            r"\b(send|email|forward|post|upload)\b(?!\s+or\b).{0,60}"
             r"\b(contacts|password|api key|credentials|schedule|history|memories)\b",
         ),
     )
@@ -92,12 +103,43 @@ def clean(content: str) -> str:
     return unicodedata.normalize("NFKC", without) if without != content else content
 
 
+_MARKDOWN_ESCAPE = re.compile(r"\\([_*`\[\]<>#])")
+_BASE64 = re.compile(r"[A-Za-z0-9+/]{40,}={0,2}")
+
+
+def _unescape(content: str) -> str:
+    """Undo Markdown escaping (``notify\\_me``) so patterns see what the model reads."""
+    return _MARKDOWN_ESCAPE.sub(r"\1", content)
+
+
+def _decoded(content: str) -> list[str]:
+    """Text hidden in base64 runs (an old trick to slip instructions past filters)."""
+    texts: list[str] = []
+    for run in _BASE64.findall(content):
+        try:
+            raw = base64.b64decode(run + "=" * (-len(run) % 4), validate=True)
+            text = raw.decode("utf-8")
+        except (binascii.Error, UnicodeDecodeError, ValueError):
+            continue
+        if text.isprintable():
+            texts.append(text)
+    return texts
+
+
 def matches(content: str) -> list[tuple[str, int, int]]:
-    """``(pattern name, start, end)`` for each match, in order."""
+    """``(pattern name, start, end)`` for each match, in order. Matching runs on the text
+    with Markdown escaping undone, and also on any base64 runs decoded."""
+    text = _unescape(content)
     found: list[tuple[str, int, int]] = []
     for name, pattern in PATTERNS:
-        for match in pattern.finditer(content):
+        for match in pattern.finditer(text):
             found.append((name, match.start(), match.end()))
+    for hidden in _decoded(text):
+        for name, pattern in PATTERNS:
+            if pattern.search(hidden):
+                found.append(("encoded instructions", 0, 0))
+                found.append((name, 0, 0))
+                break
     return sorted(found, key=lambda m: m[1])
 
 
@@ -111,6 +153,8 @@ def snippets(content: str, hits: list[tuple[str, int, int]]) -> str:
         else:
             spans.append((left, right))
     text = "\n[…]\n".join(content[a:b] for a, b in spans)
+    for hidden in _decoded(content):
+        text += f"\n[decoded from base64]: {hidden}"
     return text[:MAX_SNIPPETS_CHARS]
 
 
@@ -132,12 +176,13 @@ class InjectionScreen:
         if cleaned != content:
             reasons.append("hidden text removed")
         hits = matches(cleaned)
+        unescaped = _unescape(cleaned)
         if hits:
             names = list(dict.fromkeys(name for name, _, _ in hits))
             if self._provider is None:
                 reasons += names
             else:
-                verdict = await self._classify(snippets(cleaned, hits), tool=tool)
+                verdict = await self._classify(snippets(unescaped, hits), tool=tool)
                 if verdict is None:
                     reasons += names  # classifier unavailable: err on the side of warning
                 elif verdict.injection:

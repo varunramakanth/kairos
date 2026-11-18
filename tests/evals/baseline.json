@@ -6,17 +6,27 @@
         "n": 4,
         "pass_rate": 1.0
       },
+      "conciseness": {
+        "mean": 0.8125,
+        "n": 4,
+        "pass_rate": 1.0
+      },
       "correctness": {
         "mean": 1.0,
         "n": 4,
         "pass_rate": 1.0
       },
       "faithfulness": {
-        "mean": 1.0,
+        "mean": 0.9375,
         "n": 4,
         "pass_rate": 1.0
       },
       "goal_success": {
+        "mean": 1.0,
+        "n": 4,
+        "pass_rate": 1.0
+      },
+      "harmlessness": {
         "mean": 1.0,
         "n": 4,
         "pass_rate": 1.0
@@ -33,6 +43,11 @@
       },
       "redundant_call_rate": {
         "mean": 1.0,
+        "n": 4,
+        "pass_rate": 1.0
+      },
+      "relevance": {
+        "mean": 0.9375,
         "n": 4,
         "pass_rate": 1.0
       },
@@ -99,6 +114,110 @@
         "pass_rate": 1.0
       }
     },
+    "failures": {
+      "budget_adherence": {
+        "mean": 1.0,
+        "n": 5,
+        "pass_rate": 1.0
+      },
+      "faithfulness": {
+        "mean": 0.8,
+        "n": 5,
+        "pass_rate": 0.6
+      },
+      "goal_success": {
+        "mean": 0.8,
+        "n": 5,
+        "pass_rate": 0.8
+      },
+      "recovery": {
+        "mean": 0.95,
+        "n": 5,
+        "pass_rate": 1.0
+      },
+      "task_completion": {
+        "mean": 1.0,
+        "n": 5,
+        "pass_rate": 1.0
+      },
+      "tool_selection_accuracy": {
+        "mean": 1.0,
+        "n": 4,
+        "pass_rate": 1.0
+      }
+    },
+    "injection": {
+      "budget_adherence": {
+        "mean": 1.0,
+        "n": 8,
+        "pass_rate": 1.0
+      },
+      "conciseness": {
+        "mean": 0.75,
+        "n": 8,
+        "pass_rate": 1.0
+      },
+      "correctness": {
+        "mean": 1.0,
+        "n": 8,
+        "pass_rate": 1.0
+      },
+      "faithfulness": {
+        "mean": 1.0,
+        "n": 8,
+        "pass_rate": 1.0
+      },
+      "goal_success": {
+        "mean": 1.0,
+        "n": 8,
+        "pass_rate": 1.0
+      },
+      "harmlessness": {
+        "mean": 1.0,
+        "n": 8,
+        "pass_rate": 1.0
+      },
+      "helpfulness": {
+        "mean": 1.0,
+        "n": 8,
+        "pass_rate": 1.0
+      },
+      "injection_detection": {
+        "mean": 0.8571,
+        "n": 7,
+        "pass_rate": 0.8571
+      },
+      "injection_resistance": {
+        "mean": 1.0,
+        "n": 8,
+        "pass_rate": 1.0
+      },
+      "redundant_call_rate": {
+        "mean": 1.0,
+        "n": 8,
+        "pass_rate": 1.0
+      },
+      "relevance": {
+        "mean": 0.9688,
+        "n": 8,
+        "pass_rate": 1.0
+      },
+      "task_completion": {
+        "mean": 1.0,
+        "n": 8,
+        "pass_rate": 1.0
+      },
+      "tool_error_rate": {
+        "mean": 1.0,
+        "n": 8,
+        "pass_rate": 1.0
+      },
+      "tool_selection_accuracy": {
+        "mean": 1.0,
+        "n": 8,
+        "pass_rate": 1.0
+      }
+    },
     "intent_tools": {
       "approval_gate_adherence": {
         "mean": 1.0,
@@ -115,23 +234,33 @@
         "n": 28,
         "pass_rate": 1.0
       },
+      "conciseness": {
+        "mean": 0.75,
+        "n": 28,
+        "pass_rate": 0.7857
+      },
       "correctness": {
         "mean": 1.0,
         "n": 4,
         "pass_rate": 1.0
       },
       "faithfulness": {
-        "mean": 0.8661,
+        "mean": 0.875,
         "n": 28,
-        "pass_rate": 0.8929
+        "pass_rate": 0.9643
       },
       "goal_success": {
         "mean": 0.9464,
         "n": 28,
+        "pass_rate": 0.9643
+      },
+      "harmlessness": {
+        "mean": 1.0,
+        "n": 28,
         "pass_rate": 1.0
       },
       "helpfulness": {
-        "mean": 0.8571,
+        "mean": 0.875,
         "n": 28,
         "pass_rate": 1.0
       },
@@ -154,6 +283,11 @@
         "mean": 0.9967,
         "n": 16,
         "pass_rate": 0.9375
+      },
+      "relevance": {
+        "mean": 0.9375,
+        "n": 28,
+        "pass_rate": 1.0
       },
       "task_completion": {
         "mean": 1.0,
@@ -182,25 +316,35 @@
         "n": 5,
         "pass_rate": 1.0
       },
+      "conciseness": {
+        "mean": 0.8,
+        "n": 5,
+        "pass_rate": 1.0
+      },
       "correctness": {
         "mean": 1.0,
         "n": 2,
         "pass_rate": 1.0
       },
       "faithfulness": {
+        "mean": 0.9,
+        "n": 5,
+        "pass_rate": 1.0
+      },
+      "goal_success": {
         "mean": 0.85,
         "n": 5,
         "pass_rate": 0.8
       },
-      "goal_success": {
-        "mean": 0.9,
-        "n": 5,
-        "pass_rate": 0.8
-      },
-      "helpfulness": {
-        "mean": 0.9,
+      "harmlessness": {
+        "mean": 1.0,
         "n": 5,
         "pass_rate": 1.0
+      },
+      "helpfulness": {
+        "mean": 0.8,
+        "n": 5,
+        "pass_rate": 0.8
       },
       "injection_resistance": {
         "mean": 1.0,
@@ -209,6 +353,11 @@
       },
       "redundant_call_rate": {
         "mean": 1.0,
+        "n": 5,
+        "pass_rate": 1.0
+      },
+      "relevance": {
+        "mean": 0.95,
         "n": 5,
         "pass_rate": 1.0
       },
@@ -244,6 +393,11 @@
         "n": 10,
         "pass_rate": 1.0
       },
+      "conciseness": {
+        "mean": 0.85,
+        "n": 10,
+        "pass_rate": 1.0
+      },
       "correctness": {
         "mean": 1.0,
         "n": 6,
@@ -259,10 +413,15 @@
         "n": 10,
         "pass_rate": 1.0
       },
-      "helpfulness": {
-        "mean": 0.875,
+      "harmlessness": {
+        "mean": 1.0,
         "n": 10,
-        "pass_rate": 0.9
+        "pass_rate": 1.0
+      },
+      "helpfulness": {
+        "mean": 0.85,
+        "n": 10,
+        "pass_rate": 0.8
       },
       "injection_resistance": {
         "mean": 1.0,
@@ -275,6 +434,11 @@
         "pass_rate": 1.0
       },
       "redundant_call_rate": {
+        "mean": 1.0,
+        "n": 10,
+        "pass_rate": 1.0
+      },
+      "relevance": {
         "mean": 1.0,
         "n": 10,
         "pass_rate": 1.0

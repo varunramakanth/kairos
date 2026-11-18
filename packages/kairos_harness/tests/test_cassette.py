@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from kairos_domain.content import user_text
+from kairos_domain.content import Message, ToolResultBlock, ToolUseBlock, user_text
 from kairos_domain.model import ModelCompleted, ModelRequest
 from kairos_domain.run import ToolCallRecord
 from kairos_domain.tools import ToolContext
@@ -105,3 +105,50 @@ async def test_tool_cassette_replays_results_and_the_recorded_tool_set(tmp_path:
     assert output.content == "results for evals"
     with pytest.raises(CassetteMissError, match="no recorded result for search"):
         await replay.execute(ToolCallRecord(id="y", name="search", input={"q": "other"}), ctx)
+
+
+def after_tool(result: str) -> ModelRequest:
+    """A request whose last message is a tool result with the given text."""
+    return ModelRequest(
+        model="claude-opus-5-5",
+        system="sys",
+        messages=(
+            user_text("schedule it"),
+            Message(
+                role="assistant",
+                content=(ToolUseBlock(id="t1", name="schedule_create", input={"x": 1}),),
+            ),
+            Message(role="user", content=(ToolResultBlock(tool_use_id="t1", content=result),)),
+        ),
+    )
+
+
+async def test_a_demo_recording_matches_whatever_the_tools_returned(tmp_path: Path) -> None:
+    path = tmp_path / "demo.jsonl"
+    recorder = RecordingProvider(
+        ScriptedProvider([text_turn("scheduled")]), path, ignore_tool_output=True
+    )
+    _ = [e async for e in recorder.stream(after_tool("Proposed task job_aaa"))]
+    (entry,) = load_cassette(path)
+    assert entry.ignores_tool_output
+
+    replay = ReplayProvider(path)
+    events = [e async for e in replay.stream(after_tool("Proposed task job_bbb"))]
+    assert [e.message.text for e in events if isinstance(e, ModelCompleted)] == ["scheduled"]
+    # Anything else about the request still has to match.
+    with pytest.raises(CassetteMissError):
+        _ = [e async for e in ReplayProvider(path).stream(request("schedule it"))]
+
+
+async def test_an_ordinary_recording_still_misses_on_a_changed_tool_result(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "strict.jsonl"
+    recorder = RecordingProvider(ScriptedProvider([text_turn("scheduled")]), path)
+    _ = [e async for e in recorder.stream(after_tool("Proposed task job_aaa"))]
+    assert fingerprint(after_tool("a")) != fingerprint(after_tool("b"))
+    assert fingerprint(after_tool("a"), ignore_tool_output=True) == fingerprint(
+        after_tool("b"), ignore_tool_output=True
+    )
+    with pytest.raises(CassetteMissError):
+        _ = [e async for e in ReplayProvider(path).stream(after_tool("Proposed task job_bbb"))]

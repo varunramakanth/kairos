@@ -16,7 +16,7 @@ import ipaddress
 import socket
 import warnings
 from collections.abc import Awaitable, Callable
-from typing import Literal
+from typing import Any, Literal
 from urllib.parse import urljoin, urlsplit
 
 import httpx2
@@ -92,6 +92,29 @@ class WebSearchInput(BaseModel):
     )
 
 
+class WebToolError(Exception):
+    """A search or fetch that failed; the message is safe to show the model."""
+
+
+async def tavily_search(
+    api_key: SecretStr, client: httpx2.AsyncClient, body: dict[str, object]
+) -> list[dict[str, Any]]:
+    """One Tavily Search call. Raises ``WebToolError`` on failure."""
+    try:
+        response = await client.post(
+            TAVILY_SEARCH_URL,
+            json=body,
+            headers={"Authorization": f"Bearer {api_key.get_secret_value()}"},
+            timeout=20.0,
+        )
+    except httpx2.HTTPError as error:
+        raise WebToolError(f"search failed: {type(error).__name__}") from error
+    if response.status_code != 200:
+        raise WebToolError(f"search failed: HTTP {response.status_code}")
+    results: list[dict[str, Any]] = response.json().get("results", [])
+    return results
+
+
 def web_search_tool(api_key: SecretStr, client: httpx2.AsyncClient) -> Tool[WebSearchInput]:
     """Build ``web_search`` on the Tavily Search API (basic depth: one credit per call)."""
 
@@ -109,17 +132,9 @@ def web_search_tool(api_key: SecretStr, client: httpx2.AsyncClient) -> Tool[WebS
         if args.time_range:
             body["time_range"] = args.time_range
         try:
-            response = await client.post(
-                TAVILY_SEARCH_URL,
-                json=body,
-                headers={"Authorization": f"Bearer {api_key.get_secret_value()}"},
-                timeout=20.0,
-            )
-        except httpx2.HTTPError as error:
-            return ToolOutput(content=f"search failed: {type(error).__name__}", is_error=True)
-        if response.status_code != 200:
-            return ToolOutput(content=f"search failed: HTTP {response.status_code}", is_error=True)
-        results = response.json().get("results", [])
+            results = await tavily_search(api_key, client, body)
+        except WebToolError as error:
+            return ToolOutput(content=str(error), is_error=True)
         if not results:
             return ToolOutput(content=f"No results for {args.query!r}.")
         lines: list[str] = []
@@ -143,6 +158,35 @@ class WebFetchInput(BaseModel):
     url: str = Field(description="The full http(s) URL of the page to read.")
 
 
+async def fetch_markdown(
+    client: httpx2.AsyncClient, url: str, *, resolve: Resolver = resolve_host
+) -> str:
+    """Fetch a public page (checking every redirect hop) and return its main text as
+    Markdown. Raises ``WebToolError`` with a message for the model."""
+    start = url
+    try:
+        for _ in range(MAX_REDIRECTS + 1):
+            await check_public_url(url, resolve)
+            async with client.stream(
+                "GET", url, headers={"User-Agent": USER_AGENT}, timeout=20.0
+            ) as response:
+                if response.is_redirect and "location" in response.headers:
+                    url = urljoin(url, response.headers["location"])
+                    continue
+                if response.status_code != 200:
+                    raise WebToolError(f"fetch failed: HTTP {response.status_code} for {url}")
+                content_type = response.headers.get("content-type", "").split(";")[0]
+                if content_type and content_type not in TEXT_TYPES:
+                    raise WebToolError(f"cannot read {content_type or 'this content'} at {url}")
+                raw = await _read_capped(response)
+                return _to_markdown(raw, url=url, content_type=content_type)
+        raise WebToolError(f"too many redirects starting at {start}")
+    except BlockedAddressError as error:
+        raise WebToolError(f"refused: {error}") from error
+    except httpx2.HTTPError as error:
+        raise WebToolError(f"fetch failed: {type(error).__name__} for {url}") from error
+
+
 def web_fetch_tool(
     client: httpx2.AsyncClient, *, resolve: Resolver = resolve_host
 ) -> Tool[WebFetchInput]:
@@ -152,36 +196,10 @@ def web_fetch_tool(
     async def web_fetch(args: WebFetchInput, context: ToolContext) -> ToolOutput:
         """Read a web page and return its main text as Markdown, with links. Use it
         to read pages found with web_search or given by the user."""
-        url = args.url
         try:
-            for _ in range(MAX_REDIRECTS + 1):
-                await check_public_url(url, resolve)
-                async with client.stream(
-                    "GET", url, headers={"User-Agent": USER_AGENT}, timeout=20.0
-                ) as response:
-                    if response.is_redirect and "location" in response.headers:
-                        url = urljoin(url, response.headers["location"])
-                        continue
-                    if response.status_code != 200:
-                        return ToolOutput(
-                            content=f"fetch failed: HTTP {response.status_code} for {url}",
-                            is_error=True,
-                        )
-                    content_type = response.headers.get("content-type", "").split(";")[0]
-                    if content_type and content_type not in TEXT_TYPES:
-                        return ToolOutput(
-                            content=f"cannot read {content_type or 'this content'} at {url}",
-                            is_error=True,
-                        )
-                    raw = await _read_capped(response)
-                    return ToolOutput(content=_to_markdown(raw, url=url, content_type=content_type))
-            return ToolOutput(content=f"too many redirects starting at {args.url}", is_error=True)
-        except BlockedAddressError as error:
-            return ToolOutput(content=f"refused: {error}", is_error=True)
-        except httpx2.HTTPError as error:
-            return ToolOutput(
-                content=f"fetch failed: {type(error).__name__} for {url}", is_error=True
-            )
+            return ToolOutput(content=await fetch_markdown(client, args.url, resolve=resolve))
+        except WebToolError as error:
+            return ToolOutput(content=str(error), is_error=True)
 
     return web_fetch
 

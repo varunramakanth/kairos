@@ -32,6 +32,7 @@ from kairos_scheduler.protocols import JobRepository
 from kairos_scheduler.tools import record_observation_tool, schedule_tools
 from kairos_tools import ToolRegistry
 from kairos_tools.builtin import current_time_tool
+from kairos_tools.deals import deals_search_tool
 from kairos_tools.flights import FlightProvider, SerpApiFlights, flights_search_tool
 from kairos_tools.mcp import McpServerConfig, McpToolPolicy
 from kairos_tools.plan import plan_tool
@@ -104,6 +105,7 @@ def build_tools(
     tools = ToolRegistry([current_time_tool(clock.now), plan_tool()])
     if settings.tavily_api_key is not None:
         tools.register(web_search_tool(settings.tavily_api_key, http))
+        tools.register(deals_search_tool(settings.tavily_api_key, http))
     else:
         log.warning("web_search_disabled", reason="TAVILY_API_KEY is not set")
     tools.register(web_fetch_tool(http))
@@ -146,6 +148,7 @@ SUBAGENT_PROFILES = (
                 "web_search",
                 "web_fetch",
                 "flights_search",
+                "deals_search",
                 "browser_navigate",
                 "browser_snapshot",
                 "browser_extract",

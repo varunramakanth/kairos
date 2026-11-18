@@ -2,6 +2,7 @@
 
 import {
   CalendarClock,
+  FlaskConical,
   Inbox,
   MessageSquare,
   Plus,
@@ -87,6 +88,16 @@ export function ThreadSidebar() {
         >
           <CalendarClock className="size-3.5 text-muted-foreground" />
           Tasks &amp; watches
+        </Link>
+        <Link
+          href="/evals"
+          className={cn(
+            "flex items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-muted",
+            pathname.startsWith("/evals") && "bg-muted font-medium",
+          )}
+        >
+          <FlaskConical className="size-3.5 text-muted-foreground" />
+          Evals
         </Link>
         <Link
           href="/audit"

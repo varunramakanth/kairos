@@ -35,7 +35,15 @@ just evals          # replay every suite against the regression gate
 just evals-report   # publish the results to the dashboard at http://localhost:3000/evals
 ```
 
-See [docs/evals.md](docs/evals.md) for the workflow, and [ADR-011](docs/adr/011-eval-framework.md) for the design.
+See [docs/evals.md](docs/evals.md) for the workflow, and [ADR-011](docs/adr/011-eval-framework.md) for the design. In production every finished run is also scored with label-free metrics (the `online` suite).
+
+## Deploying to AWS
+
+One lean CDK stack in `ca-central-1`: CloudFront, an internal ALB, one ARM64 Fargate task (API, worker and web), RDS Postgres, and Cognito sign-in with MFA. It costs about $57/month plus model usage. Follow [docs/runbook.md](docs/runbook.md); the design and cost table are in [ADR-017](docs/adr/017-deployment.md).
+
+```bash
+just deploy <admin-profile> -c owner_email=you@example.com -c cognito_prefix=kairos-abcd
+```
 
 ## Layout
 
@@ -44,8 +52,8 @@ See [docs/evals.md](docs/evals.md) for the workflow, and [ADR-011](docs/adr/011-
 | `packages/kairos_*` | Python libraries: harness, providers, tools, memory, scheduler, policy, notify, db, telemetry, domain, evals |
 | `services/` | Python entrypoints: `api`, `worker`, `browser` |
 | `apps/web` | Next.js UI (the only TypeScript) |
-| `infra/` | Local compose file; AWS CDK later |
-| `docs/` | [Architecture](docs/architecture.md), [evals](docs/evals.md) and ADRs |
+| `infra/` | Local compose file, container images (`docker/`) and the AWS CDK app (`cdk/`) |
+| `docs/` | [Architecture](docs/architecture.md), [evals](docs/evals.md), [runbook](docs/runbook.md) and ADRs |
 
 ## Acknowledgements
 

@@ -1389,10 +1389,20 @@ version = "0.1.0"
 source = { editable = "packages/kairos_memory" }
 dependencies = [
     { name = "kairos-domain" },
+    { name = "kairos-harness" },
+    { name = "kairos-tools" },
+    { name = "pydantic" },
+    { name = "structlog" },
 ]
 
 [package.metadata]
-requires-dist = [{ name = "kairos-domain", editable = "packages/kairos_domain" }]
+requires-dist = [
+    { name = "kairos-domain", editable = "packages/kairos_domain" },
+    { name = "kairos-harness", editable = "packages/kairos_harness" },
+    { name = "kairos-tools", editable = "packages/kairos_tools" },
+    { name = "pydantic", specifier = ">=2.11" },
+    { name = "structlog", specifier = ">=25.4" },
+]
 
 [[package]]
 name = "kairos-notify"
@@ -1529,6 +1539,7 @@ dependencies = [
     { name = "kairos-db" },
     { name = "kairos-domain" },
     { name = "kairos-harness" },
+    { name = "kairos-memory" },
     { name = "kairos-notify" },
     { name = "kairos-policy" },
     { name = "kairos-providers" },
@@ -1546,6 +1557,7 @@ requires-dist = [
     { name = "kairos-db", editable = "packages/kairos_db" },
     { name = "kairos-domain", editable = "packages/kairos_domain" },
     { name = "kairos-harness", editable = "packages/kairos_harness" },
+    { name = "kairos-memory", editable = "packages/kairos_memory" },
     { name = "kairos-notify", editable = "packages/kairos_notify" },
     { name = "kairos-policy", editable = "packages/kairos_policy" },
     { name = "kairos-providers", editable = "packages/kairos_providers" },

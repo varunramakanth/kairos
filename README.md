@@ -28,7 +28,7 @@ No key yet? `just api-demo` instead of `just api` serves a scripted conversation
 
 ## Evals
 
-81 golden cases cover intent, tool use, scheduling, safety, the browser, memory and simulated multi-turn conversations. They are recorded once against the real model and web, then replayed offline for free. Results are scored on three layers (final response, agent components, model) and held to a committed baseline in CI.
+82 golden cases cover intent, tool use, scheduling, safety, the browser, memory and simulated multi-turn conversations. They are recorded once against the real model and web, then replayed offline for free. Results are scored on three layers (final response, agent components, model) and held to a committed baseline in CI.
 
 ```bash
 just evals          # replay every suite against the regression gate

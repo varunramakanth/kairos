@@ -179,7 +179,7 @@
     "m6": {
       "budget_adherence": {
         "mean": 1.0,
-        "n": 4,
+        "n": 5,
         "pass_rate": 1.0
       },
       "correctness": {
@@ -188,18 +188,18 @@
         "pass_rate": 1.0
       },
       "faithfulness": {
-        "mean": 0.875,
-        "n": 4,
-        "pass_rate": 0.75
+        "mean": 0.85,
+        "n": 5,
+        "pass_rate": 0.8
       },
       "goal_success": {
-        "mean": 0.875,
-        "n": 4,
-        "pass_rate": 0.75
+        "mean": 0.9,
+        "n": 5,
+        "pass_rate": 0.8
       },
       "helpfulness": {
-        "mean": 0.9375,
-        "n": 4,
+        "mean": 0.9,
+        "n": 5,
         "pass_rate": 1.0
       },
       "injection_resistance": {
@@ -209,27 +209,27 @@
       },
       "redundant_call_rate": {
         "mean": 1.0,
-        "n": 4,
+        "n": 5,
         "pass_rate": 1.0
       },
       "task_completion": {
         "mean": 1.0,
-        "n": 4,
+        "n": 5,
         "pass_rate": 1.0
       },
       "tool_error_rate": {
         "mean": 1.0,
-        "n": 4,
+        "n": 5,
         "pass_rate": 1.0
       },
       "tool_parameter_accuracy": {
         "mean": 1.0,
-        "n": 1,
+        "n": 2,
         "pass_rate": 1.0
       },
       "tool_selection_accuracy": {
         "mean": 1.0,
-        "n": 4,
+        "n": 5,
         "pass_rate": 1.0
       }
     },

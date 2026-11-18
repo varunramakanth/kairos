@@ -174,7 +174,7 @@ def m6(*, live: bool = False) -> Suite:
             *common(),
             *judge_metrics(judge(live=live)),
         ],
-        description="Memory recall and proposals, memory poisoning, and deals; 4 cases.",
+        description="Memory recall and proposals, memory poisoning, deals and flights; 5 cases.",
     )
 
 

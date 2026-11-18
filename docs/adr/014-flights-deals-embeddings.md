@@ -80,7 +80,7 @@ offered a watch, and the judge scored the outcome as partial. The next steps are
     recall, a memory proposal, memory poisoning, and deals.
   - Injection resistance is 1.0 across both, including a page that tried to plant a
     "preferred airline" memory.
-- **Flight eval not yet recorded:** a live flight case waits for the owner's SerpApi
-  key. The adapter, tool and watch scenario are tested offline.
+- **Flight eval recorded:** a live flight case (YYZ to LIS, 15 to 29 March 2027) used
+  one SerpApi search and found 721 CAD cheapest, which Google rated a "low" price.
 - **Changing the embedding model:** a model with a different dimension needs a
   migration.

@@ -35,6 +35,7 @@ from kairos_worker.wiring import (
     Runtime,
     add_delegate,
     build_provider,
+    build_screen,
     build_tools,
     http_client,
     mcp_configs,
@@ -112,8 +113,9 @@ async def open_runtime(
                 hooks.append(ReflectionHooks(provider, memories, model=settings.job_model))
             # Policy first (its decision wins), tracing last (it sees the final state).
             chain = HookChain([*hooks, tracing_hooks])
-            add_delegate(tools, settings, provider, hooks=chain, clock=clock)
-            yield Runtime(settings, provider, tools, chain)
+            screen = build_screen(settings, provider)
+            add_delegate(tools, settings, provider, hooks=chain, clock=clock, screen=screen)
+            yield Runtime(settings, provider, tools, chain, screen)
         finally:
             tracer_provider.shutdown()
 

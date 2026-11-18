@@ -15,7 +15,7 @@ from typing import Protocol
 from kairos_domain.events import DurableEvent, RunEvent
 from kairos_domain.model import ModelCompleted, ModelEvent, ModelRequest
 from kairos_domain.run import RunRequest, RunState, ToolCallRecord
-from kairos_domain.tools import ToolContext, ToolDecision, ToolOutput, ToolSpec
+from kairos_domain.tools import ScreenVerdict, ToolContext, ToolDecision, ToolOutput, ToolSpec
 
 
 class Provider(Protocol):
@@ -45,6 +45,17 @@ class ToolExecutor(Protocol):
     async def execute(self, call: ToolCallRecord, context: ToolContext) -> ToolOutput:
         """Run one call. May raise; the loop turns exceptions into error results."""
         ...
+
+
+class ContentScreen(Protocol):
+    """Screens untrusted tool output for prompt injection before the model sees it.
+
+    It may clean the content (remove hidden characters) and flag it. Flagged content
+    is still shown to the model, marked as suspected injection, so the agent can tell
+    the user; screening never silently drops information.
+    """
+
+    async def screen(self, content: str, *, tool: str) -> ScreenVerdict: ...
 
 
 class Checkpointer(Protocol):

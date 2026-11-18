@@ -177,6 +177,8 @@ class TracingHooks:
             return  # denied, unknown or human-resolved: nothing was executed
         span, started_ns = entry
         span.set_attribute(a.TOOL_IS_ERROR, output.is_error)
+        if output.suspected_injection:
+            span.set_attribute(a.TOOL_SUSPECTED_INJECTION, True)
         if output.is_error:
             _fail(span, "tool_error", end=False)
         if self._capture_content:

@@ -49,6 +49,11 @@ class Settings(BaseSettings):
     """Enables ``flights_search`` (Google Flights via SerpApi). Free plan: ~250 searches
     a month; one watch checking every 6 hours uses ~120."""
 
+    # --- hardening (M7) -------------------------------------------------------------
+    injection_screening: Literal["model", "patterns", "off"] = "model"
+    """Screen untrusted tool output: patterns always, and with ``model`` the job model
+    decides pattern matches (a fraction of a cent each). ``patterns`` flags every match."""
+
     # --- subagents and memory (M6) ----------------------------------------------------
     subagent_model: str = "claude-sonnet-5-5"
     """Model for ``delegate`` children (focused, read-only research)."""

@@ -9,6 +9,7 @@ from kairos_harness.loop import AgentLoop, LoopConfig
 from kairos_harness.protocols import (
     Checkpointer,
     Clock,
+    ContentScreen,
     Harness,
     Hooks,
     IdGenerator,
@@ -23,6 +24,7 @@ __all__ = [
     "BaseHooks",
     "Checkpointer",
     "Clock",
+    "ContentScreen",
     "Deny",
     "FakeClock",
     "Harness",

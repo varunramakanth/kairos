@@ -42,6 +42,7 @@ from kairos_harness.cassette import (
 )
 from kairos_memory.testing import MemoryMemories
 from kairos_policy import PolicyHooks
+from kairos_policy.screening import InjectionScreen
 from kairos_scheduler.testing import MemoryJobs
 from kairos_telemetry import OtlpJsonFileExporter, TracingHooks, configure_tracing
 
@@ -216,13 +217,15 @@ class KairosAdapter:
                 example, request, model_path, tool_path, clock, hooks, checkpointer
             )
         else:
+            provider = ReplayProvider(model_path, name="anthropic")
             loop = AgentLoop(
-                provider=ReplayProvider(model_path, name="anthropic"),
+                provider=provider,
                 tools=ReplayToolExecutor(tool_path),
                 checkpointer=checkpointer,
                 clock=clock,
                 ids=SeededIdGenerator(run_id),
                 hooks=hooks,
+                screen=InjectionScreen(provider),
             )
             finished = await _finish(loop, request)
         self.cost_usd += finished.cost_usd
@@ -276,13 +279,17 @@ class KairosAdapter:
                 toolset = await stack.enter_async_context(McpToolset(config))
                 for item in toolset.tools:
                     tools.register(item)
+            recorder = RecordingProvider(anthropic_provider(), model_path)
             loop = AgentLoop(
-                provider=RecordingProvider(anthropic_provider(), model_path),
+                provider=recorder,
                 tools=RecordingToolExecutor(tools, tool_path),
                 checkpointer=checkpointer,
                 clock=clock,
                 ids=SeededIdGenerator(request.run_id),
                 hooks=hooks,
+                # The classifier's calls are recorded in the same cassette, so replays
+                # screen exactly as the recording did.
+                screen=InjectionScreen(recorder),
             )
             return await _finish(loop, request)
 

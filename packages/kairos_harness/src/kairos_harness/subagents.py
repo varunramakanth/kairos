@@ -26,7 +26,7 @@ from kairos_domain.tools import ToolContext, ToolOutput, ToolRisk, ToolSpec
 from kairos_domain.usage import Budget
 from kairos_harness.checkpoint import InMemoryCheckpointer
 from kairos_harness.loop import AgentLoop
-from kairos_harness.protocols import Clock, Hooks, Provider, ToolExecutor
+from kairos_harness.protocols import Clock, ContentScreen, Hooks, Provider, ToolExecutor
 
 RESULT_CHARS = 6_000
 
@@ -104,7 +104,9 @@ class Subagents:
         model: str,
         hooks: Hooks | None = None,
         clock: Clock | None = None,
+        screen: ContentScreen | None = None,
     ) -> None:
+        self._screen = screen
         self._provider = provider
         self._tools = tools
         self.profiles: Mapping[str, SubagentProfile] = {p.name: p for p in profiles}
@@ -123,6 +125,7 @@ class Subagents:
             checkpointer=InMemoryCheckpointer(),
             clock=self._clock,
             hooks=self._hooks,
+            screen=self._screen,
         )
         system = SUBAGENT_IDENTITY + (f"\n\n{chosen.instructions}" if chosen.instructions else "")
         request = RunRequest(

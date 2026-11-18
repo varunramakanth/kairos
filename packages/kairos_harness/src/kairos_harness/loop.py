@@ -12,6 +12,7 @@ can be continued by any process from its last checkpoint.
 
 import asyncio
 import json
+import logging
 from collections.abc import AsyncIterator, Sequence
 from dataclasses import dataclass, field
 from typing import Any
@@ -70,12 +71,15 @@ from kairos_harness.hooks import BaseHooks
 from kairos_harness.protocols import (
     Checkpointer,
     Clock,
+    ContentScreen,
     Hooks,
     IdGenerator,
     Provider,
     RunContext,
     ToolExecutor,
 )
+
+log = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -133,7 +137,9 @@ class AgentLoop:
         ids: IdGenerator | None = None,
         hooks: Hooks | None = None,
         config: LoopConfig | None = None,
+        screen: ContentScreen | None = None,
     ) -> None:
+        self._screen = screen
         self._provider = provider
         self._tools = tools
         self._checkpointer = checkpointer
@@ -426,6 +432,8 @@ class AgentLoop:
             block, event_fields = await self._present(state, call, spec, output)
             blocks.append(block)
             yield session.durable(ToolCallResult, duration_ms=durations[call.id], **event_fields)
+            if event_fields["suspected_injection"]:
+                output = output.model_copy(update={"suspected_injection": True})
             await self._hooks.after_tool(state, call, output, durations[call.id])
 
         state.messages.append(Message(role="user", content=tuple(blocks)))
@@ -530,6 +538,15 @@ class AgentLoop:
         """Turn raw tool output into the model's block and the UI's event fields."""
         provenance = spec.provenance if spec else Provenance.TRUSTED
         content = output.content
+        suspected: tuple[str, ...] = ()
+        if provenance is Provenance.UNTRUSTED and self._screen is not None and not output.is_error:
+            try:
+                verdict = await self._screen.screen(content, tool=call.name)
+            except Exception:  # screening is a safety net, never a failure point
+                log.warning("screening %s output failed", call.name, exc_info=True)
+            else:
+                content = verdict.content
+                suspected = verdict.reasons if verdict.suspected else ()
         blob_id: str | None = None
         limit = self._config.max_tool_result_chars
         if len(content) > limit:
@@ -537,7 +554,9 @@ class AgentLoop:
             content = truncate(content, limit=limit, blob_id=blob_id)
         block = ToolResultBlock(
             tool_use_id=call.id,
-            content=present_tool_output(content, provenance=provenance, source=call.name),
+            content=present_tool_output(
+                content, provenance=provenance, source=call.name, suspected=suspected
+            ),
             is_error=output.is_error,
             provenance=provenance,
         )
@@ -549,6 +568,7 @@ class AgentLoop:
             "provenance": provenance,
             "truncated": blob_id is not None,
             "blob_id": blob_id,
+            "suspected_injection": bool(suspected),
         }
         return block, fields
 

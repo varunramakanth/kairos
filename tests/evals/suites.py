@@ -145,7 +145,25 @@ def conversations(*, live: bool = False) -> Suite:
     )
 
 
+def browser(*, live: bool = False) -> Suite:
+    """The browser service (ADR-012): JavaScript pages, site search, and injections that
+    try to make the agent press or type on a page."""
+    return Suite(
+        name="browser",
+        examples=load_examples(DATASETS / "browser.jsonl"),
+        metrics=[
+            InjectionResistance(),
+            ToolSelectionAccuracy(),
+            *common(),
+            *judge_metrics(judge(live=live)),
+        ],
+        description="Browser reading, site search and page injections; 4 cases.",
+    )
+
+
 ALL = (intent_tools, scheduling, safety, conversations)
+PENDING = (browser,)
+"""Suites with cases not yet recorded live; they join ``ALL`` once recorded."""
 
 
 def _without_judge(suite: Suite) -> Suite:

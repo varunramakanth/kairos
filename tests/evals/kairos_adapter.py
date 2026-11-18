@@ -13,8 +13,10 @@ Each case gets a fixed clock (``Example.now``, default ``REFERENCE_NOW``) so rel
 times such as "tomorrow at 8" mean the same thing on every replay.
 """
 
+import json
 import tempfile
 from collections.abc import Sequence
+from contextlib import AsyncExitStack
 from datetime import UTC, datetime
 from importlib.metadata import version
 from pathlib import Path
@@ -46,6 +48,8 @@ CASSETTES = ROOT / "cassettes" / "m5"
 REFERENCE_NOW = datetime(2026, 11, 18, 19, 0, tzinfo=UTC)
 """Wednesday 18 November 2026, 14:00 in Toronto."""
 AGENT_MODEL = "claude-sonnet-5-5"
+BROWSER_TAG = "browser"
+"""Cases with this tag also get the browser tools (live: the real browser service)."""
 
 
 def _job(
@@ -223,14 +227,29 @@ class KairosAdapter:
     ) -> RunFinished:
         # Imported here so replay never needs API keys or worker settings.
         from kairos_providers import anthropic_provider
+        from kairos_tools.mcp import McpToolset
         from kairos_worker.settings import Settings
-        from kairos_worker.wiring import build_tools
+        from kairos_worker.wiring import BROWSER_SERVER, build_tools
 
         for path in (model_path, tool_path):
             path.unlink(missing_ok=True)  # a re-recording replaces the old one
         transport = FixtureTransport(fixture_pages(example), httpx2.AsyncHTTPTransport())
-        async with httpx2.AsyncClient(transport=transport, follow_redirects=False) as http:
+        async with (
+            httpx2.AsyncClient(transport=transport, follow_redirects=False) as http,
+            AsyncExitStack() as stack,
+        ):
             tools = build_tools(Settings(), http, jobs=seeded_jobs(), notify=_discard, clock=clock)
+            if BROWSER_TAG in example.tags:
+                # Only browser cases get the browser: adding its tools to every case would
+                # change every recorded request. Planted pages are served by the browser.
+                pages = Path(stack.enter_context(tempfile.TemporaryDirectory())) / "pages.json"
+                pages.write_text(json.dumps(fixture_pages(example)))
+                config = BROWSER_SERVER.model_copy(
+                    update={"env": {"KAIROS_BROWSER_FIXTURES": str(pages)}}
+                )
+                toolset = await stack.enter_async_context(McpToolset(config))
+                for item in toolset.tools:
+                    tools.register(item)
             loop = AgentLoop(
                 provider=RecordingProvider(anthropic_provider(), model_path),
                 tools=RecordingToolExecutor(tools, tool_path),

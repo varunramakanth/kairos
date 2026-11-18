@@ -37,7 +37,7 @@ export function EvalRunView({
   const shown = showPassing ? outcomes : failing;
 
   return (
-    <div className="mx-auto w-full max-w-5xl space-y-5 overflow-y-auto px-6 py-6">
+    <div className="mx-auto w-full max-w-5xl space-y-5 overflow-y-auto px-4 md:px-6 py-6">
       <header className="space-y-1">
         <Link
           href="/evals"

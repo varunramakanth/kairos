@@ -60,7 +60,7 @@ export default function ReviewPage() {
   }
 
   return (
-    <div className="mx-auto w-full max-w-3xl space-y-5 overflow-y-auto px-6 py-6">
+    <div className="mx-auto w-full max-w-3xl space-y-5 overflow-y-auto px-4 md:px-6 py-6">
       <header className="space-y-1">
         <Link
           href="/evals"
@@ -149,28 +149,30 @@ export default function ReviewPage() {
       {calibration.length > 0 && (
         <section className="space-y-2">
           <h2 className="font-medium">Calibration so far</h2>
-          <table className="w-full text-sm">
-            <thead className="text-left text-muted-foreground text-xs">
-              <tr>
-                <th className="py-1 font-normal">Criterion</th>
-                <th className="py-1 font-normal">Labels</th>
-                <th className="py-1 font-normal">Agreement</th>
-                <th className="py-1 font-normal">Kappa</th>
-                <th className="py-1 font-normal">Trusted</th>
-              </tr>
-            </thead>
-            <tbody>
-              {calibration.map((c) => (
-                <tr key={c.metric_id}>
-                  <td className="py-1 font-mono text-xs">{c.metric_id}</td>
-                  <td className="py-1">{c.n}</td>
-                  <td className="py-1">{(c.agreement * 100).toFixed(0)}%</td>
-                  <td className="py-1">{c.kappa?.toFixed(2) ?? "–"}</td>
-                  <td className="py-1">{c.trusted ? "yes" : "not yet"}</td>
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[32rem] text-sm">
+              <thead className="text-left text-muted-foreground text-xs">
+                <tr>
+                  <th className="py-1 font-normal">Criterion</th>
+                  <th className="py-1 font-normal">Labels</th>
+                  <th className="py-1 font-normal">Agreement</th>
+                  <th className="py-1 font-normal">Kappa</th>
+                  <th className="py-1 font-normal">Trusted</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {calibration.map((c) => (
+                  <tr key={c.metric_id}>
+                    <td className="py-1 font-mono text-xs">{c.metric_id}</td>
+                    <td className="py-1">{c.n}</td>
+                    <td className="py-1">{(c.agreement * 100).toFixed(0)}%</td>
+                    <td className="py-1">{c.kappa?.toFixed(2) ?? "–"}</td>
+                    <td className="py-1">{c.trusted ? "yes" : "not yet"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </section>
       )}
     </div>

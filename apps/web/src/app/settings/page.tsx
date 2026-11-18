@@ -74,7 +74,7 @@ export default function SettingsPage() {
     return <p className="p-6 text-muted-foreground">{message ?? "Loading…"}</p>;
 
   return (
-    <div className="mx-auto w-full max-w-3xl space-y-6 overflow-y-auto px-6 py-6">
+    <div className="mx-auto w-full max-w-3xl space-y-6 overflow-y-auto px-4 md:px-6 py-6">
       <h1 className="font-semibold text-xl">Settings</h1>
       {message && (
         <p className="rounded-md bg-muted px-3 py-2 text-sm">{message}</p>

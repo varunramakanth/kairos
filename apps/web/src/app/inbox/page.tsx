@@ -31,7 +31,7 @@ export default function InboxPage() {
     approvals?.filter((a) => a.status !== "pending").slice(0, 20) ?? [];
 
   return (
-    <div className="mx-auto w-full max-w-3xl space-y-6 overflow-y-auto px-6 py-6">
+    <div className="mx-auto w-full max-w-3xl space-y-6 overflow-y-auto px-4 md:px-6 py-6">
       <header>
         <h1 className="font-semibold text-xl">Approval inbox</h1>
         <p className="text-muted-foreground text-sm">

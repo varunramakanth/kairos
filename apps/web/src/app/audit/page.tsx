@@ -36,7 +36,7 @@ export default function AuditPage() {
   }, [load]);
 
   return (
-    <div className="mx-auto w-full max-w-5xl space-y-4 overflow-y-auto px-6 py-6">
+    <div className="mx-auto w-full max-w-5xl space-y-4 overflow-y-auto px-4 md:px-6 py-6">
       <header>
         <h1 className="font-semibold text-xl">Audit log</h1>
         <p className="text-muted-foreground text-sm">
@@ -46,7 +46,7 @@ export default function AuditPage() {
       </header>
       {error && <p className="text-destructive text-sm">{error}</p>}
       <div className="overflow-x-auto rounded-lg border">
-        <table className="w-full text-sm">
+        <table className="w-full min-w-[36rem] text-sm">
           <thead className="bg-muted/50 text-left text-muted-foreground text-xs">
             <tr>
               <th className="px-3 py-2 font-normal">When</th>

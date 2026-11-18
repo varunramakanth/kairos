@@ -1,0 +1,227 @@
+{
+  "suites": {
+    "conversations": {
+      "approval_gate_adherence": {
+        "mean": 1.0,
+        "n": 2,
+        "pass_rate": 1.0
+      },
+      "budget_adherence": {
+        "mean": 1.0,
+        "n": 13,
+        "pass_rate": 1.0
+      },
+      "conversation_goal_success": {
+        "mean": 0.85,
+        "n": 5,
+        "pass_rate": 0.8
+      },
+      "conversation_safety": {
+        "mean": 1.0,
+        "n": 5,
+        "pass_rate": 1.0
+      },
+      "injection_resistance": {
+        "mean": 1.0,
+        "n": 2,
+        "pass_rate": 1.0
+      },
+      "redundant_call_rate": {
+        "mean": 1.0,
+        "n": 8,
+        "pass_rate": 1.0
+      },
+      "tool_error_rate": {
+        "mean": 1.0,
+        "n": 8,
+        "pass_rate": 1.0
+      },
+      "topic_adherence": {
+        "mean": 0.95,
+        "n": 5,
+        "pass_rate": 1.0
+      }
+    },
+    "intent_tools": {
+      "approval_gate_adherence": {
+        "mean": 1.0,
+        "n": 5,
+        "pass_rate": 1.0
+      },
+      "budget_adherence": {
+        "mean": 1.0,
+        "n": 28,
+        "pass_rate": 1.0
+      },
+      "clarification_quality": {
+        "mean": 1.0,
+        "n": 28,
+        "pass_rate": 1.0
+      },
+      "correctness": {
+        "mean": 1.0,
+        "n": 4,
+        "pass_rate": 1.0
+      },
+      "faithfulness": {
+        "mean": 0.8661,
+        "n": 28,
+        "pass_rate": 0.8929
+      },
+      "goal_success": {
+        "mean": 0.9375,
+        "n": 28,
+        "pass_rate": 1.0
+      },
+      "helpfulness": {
+        "mean": 0.8214,
+        "n": 28,
+        "pass_rate": 0.8571
+      },
+      "intent_accuracy": {
+        "mean": 1.0,
+        "n": 28,
+        "pass_rate": 1.0
+      },
+      "plan_completion": {
+        "mean": 1.0,
+        "n": 1,
+        "pass_rate": 1.0
+      },
+      "redundant_call_rate": {
+        "mean": 0.9967,
+        "n": 16,
+        "pass_rate": 0.9375
+      },
+      "task_completion": {
+        "mean": 1.0,
+        "n": 28,
+        "pass_rate": 1.0
+      },
+      "tool_error_rate": {
+        "mean": 0.9533,
+        "n": 15,
+        "pass_rate": 0.8667
+      },
+      "tool_parameter_accuracy": {
+        "mean": 1.0,
+        "n": 9,
+        "pass_rate": 1.0
+      },
+      "tool_selection_accuracy": {
+        "mean": 1.0,
+        "n": 28,
+        "pass_rate": 1.0
+      }
+    },
+    "safety": {
+      "approval_gate_adherence": {
+        "mean": 1.0,
+        "n": 4,
+        "pass_rate": 1.0
+      },
+      "budget_adherence": {
+        "mean": 1.0,
+        "n": 10,
+        "pass_rate": 1.0
+      },
+      "correctness": {
+        "mean": 1.0,
+        "n": 6,
+        "pass_rate": 1.0
+      },
+      "faithfulness": {
+        "mean": 0.975,
+        "n": 10,
+        "pass_rate": 1.0
+      },
+      "goal_success": {
+        "mean": 0.95,
+        "n": 10,
+        "pass_rate": 1.0
+      },
+      "helpfulness": {
+        "mean": 0.775,
+        "n": 10,
+        "pass_rate": 0.6
+      },
+      "injection_resistance": {
+        "mean": 1.0,
+        "n": 6,
+        "pass_rate": 1.0
+      },
+      "redundant_call_rate": {
+        "mean": 1.0,
+        "n": 10,
+        "pass_rate": 1.0
+      },
+      "schedule_correctness": {
+        "mean": 1.0,
+        "n": 1,
+        "pass_rate": 1.0
+      },
+      "task_completion": {
+        "mean": 1.0,
+        "n": 10,
+        "pass_rate": 1.0
+      },
+      "tool_error_rate": {
+        "mean": 1.0,
+        "n": 10,
+        "pass_rate": 1.0
+      },
+      "tool_parameter_accuracy": {
+        "mean": 1.0,
+        "n": 3,
+        "pass_rate": 1.0
+      },
+      "tool_selection_accuracy": {
+        "mean": 1.0,
+        "n": 10,
+        "pass_rate": 1.0
+      }
+    },
+    "scheduling": {
+      "approval_gate_adherence": {
+        "mean": 1.0,
+        "n": 1,
+        "pass_rate": 1.0
+      },
+      "budget_adherence": {
+        "mean": 1.0,
+        "n": 30,
+        "pass_rate": 1.0
+      },
+      "intent_accuracy": {
+        "mean": 0.9667,
+        "n": 30,
+        "pass_rate": 0.9667
+      },
+      "redundant_call_rate": {
+        "mean": 1.0,
+        "n": 29,
+        "pass_rate": 1.0
+      },
+      "schedule_correctness": {
+        "mean": 1.0,
+        "n": 29,
+        "pass_rate": 1.0
+      },
+      "task_completion": {
+        "mean": 0.9667,
+        "n": 30,
+        "pass_rate": 0.9667
+      },
+      "tool_error_rate": {
+        "mean": 0.9799,
+        "n": 29,
+        "pass_rate": 0.931
+      },
+      "tool_selection_accuracy": {
+        "mean": 0.9833,
+        "n": 30,
+        "pass_rate": 0.9667
+      }
+    }
+  }
+}

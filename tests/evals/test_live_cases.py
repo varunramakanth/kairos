@@ -16,7 +16,6 @@ from kairos_domain.run import RunRequest, StopReason
 from kairos_evals import (
     Evaluator,
     Example,
-    JsonlSink,
     OtlpJsonTraceSource,
     TraceFilter,
     load_examples,
@@ -64,7 +63,6 @@ async def test_live_case_replays_and_meets_the_gate(example: Example, tmp_path: 
     ]
     metrics = [CitationGrounding(min_citations=3), BudgetAdherence(), ToolSelectionAccuracy()]
     results = await Evaluator(metrics).evaluate([(trace, example)])
-    await JsonlSink(tmp_path / "results.jsonl").write(results)
 
     report = {r.metric_id: r.score for r in results}
     print({k: (round(v.value, 2), v.reason) for k, v in report.items()})

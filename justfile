@@ -81,6 +81,25 @@ record-cassettes:
 record-live *cases:
     LIVE=1 uv run python -m tests.evals.record_live {{ cases }}
 
+suites := "tests.evals.suites:intent_tools tests.evals.suites:scheduling tests.evals.suites:safety tests.evals.suites:conversations"
+
+# Replay the M5 suites and write their summary as the new regression baseline
+evals-baseline:
+    uv run kairos-evals run {{ suites }} --harness tests.evals.kairos_adapter:replay --update-baseline tests/evals/baseline.json
+
+# Replay the M5 suites, gate them, and publish the results to the local dashboard (/evals)
+evals-report:
+    uv run kairos-evals run {{ suites }} --harness tests.evals.kairos_adapter:replay --gate tests/evals/baseline.json --out jsonl:.evals --out "postgres:$KAIROS_DATABASE_URL"
+    uv run kairos-evals run tests.evals.suites:intent_tools_core tests.evals.suites:scheduling tests.evals.suites:safety_core --harness tests.evals.kairos_adapter:haiku --out jsonl:.evals --out "postgres:$KAIROS_DATABASE_URL"
+
+# Record the M5 eval suites live (real model, web, judge; costs money). Capped by KAIROS_EVALS_MAX_USD.
+record-evals *args:
+    LIVE=1 uv run python -m tests.evals.record_evals {{ args }}
+
+# Draft candidate golden cases with Sonnet for curation (costs a few cents). Optional categories.
+seed-evals *categories:
+    LIVE=1 uv run python -m tests.evals.seed_cases {{ categories }}
+
 # Apply database migrations to the local Postgres
 migrate:
     uv run kairos migrate

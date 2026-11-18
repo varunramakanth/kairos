@@ -16,7 +16,6 @@ from kairos_domain.run import RunRequest, StopReason
 from kairos_evals import (
     Evaluator,
     Example,
-    JsonlSink,
     OtlpJsonTraceSource,
     Trace,
     TraceFilter,
@@ -74,7 +73,6 @@ async def test_golden_cases_meet_the_regression_gate(tmp_path: Path) -> None:
         cases.append((await trace_for(example, traces_path), example))
 
     results = await Evaluator([ToolSelectionAccuracy(), BudgetAdherence()]).evaluate(cases)
-    await JsonlSink(tmp_path / "results.jsonl").write(results)
 
     failures = [
         f"{r.example_id} {r.metric_id}: {r.score.reason}" for r in results if not r.score.passed

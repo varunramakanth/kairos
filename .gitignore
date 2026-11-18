@@ -26,3 +26,4 @@ cdk.out/
 # Claude Code local state
 .claude/worktrees/
 .claude/settings.local.json
+.evals/

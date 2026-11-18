@@ -301,3 +301,27 @@ async def test_clarification_detector_decides_tool_less_replies_only() -> None:
     assert len(model.prompts) == 1  # tools settled it; no model call
     assert IntentAccuracy(detector).kind == "llm_judge"
     assert IntentAccuracy().kind == "deterministic"
+
+
+async def test_a_judge_refusal_is_recorded_and_reported_as_not_applicable(tmp_path: Path) -> None:
+    from kairos_evals import ModelRefusal
+
+    class Refuses(FakeModel):
+        async def complete(
+            self, *, system: str, messages: Sequence[ChatMessage], schema: dict[str, Any]
+        ) -> dict[str, JsonValue]:
+            raise ModelRefusal("fake-model declined to answer")
+
+    path = tmp_path / "judge.jsonl"
+    live = ModelCassette(path, model="fake-model", live=Refuses([]))
+    trace = make_trace(answer="hi")
+    scores = [
+        await m.evaluate(trace, Example(id="e", input="q")) for m in judge_metrics(Judge(live))
+    ]
+    assert all(not s.applicable for s in scores)
+    assert sum("declined" in s.reason for s in scores) == 3  # correctness: no reference
+    replay = ModelCassette(path, model="fake-model")  # the refusal replays without a model
+    scores = [
+        await m.evaluate(trace, Example(id="e", input="q")) for m in judge_metrics(Judge(replay))
+    ]
+    assert all(not s.applicable for s in scores)

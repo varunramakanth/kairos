@@ -28,7 +28,10 @@ app = typer.Typer(help="Run and gate agent eval suites.", no_args_is_help=True)
 
 
 def load(path: str) -> Any:
-    """Import ``package.module:attribute``."""
+    """Import ``package.module:attribute``, resolving modules from the working
+    directory first (as ``python -m`` would), so a project's own suites load."""
+    if (cwd := str(Path.cwd())) not in sys.path:
+        sys.path.insert(0, cwd)
     module, _, attribute = path.partition(":")
     if not attribute:
         raise typer.BadParameter(f"expected module:attribute, got {path!r}")

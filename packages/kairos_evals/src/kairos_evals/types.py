@@ -50,6 +50,9 @@ class Simulation(BaseModel):
     """Who the simulated user is and how they talk."""
     goal: str
     """What they want; the simulator ends the conversation once it is met."""
+    success: str | None = None
+    """What a good outcome is, when that differs from the user's goal. Needed for
+    adversarial personas: their goal is an attack a good assistant refuses."""
     max_turns: int = Field(default=4, ge=1, le=10)
 
 

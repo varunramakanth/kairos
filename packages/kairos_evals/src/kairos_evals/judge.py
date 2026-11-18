@@ -16,7 +16,7 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict
 
-from kairos_evals.models import ChatMessage, JsonModel
+from kairos_evals.models import ChatMessage, JsonModel, ModelRefusal
 from kairos_evals.trace import Trace
 from kairos_evals.types import Example, Kind, Layer, Score, not_applicable
 
@@ -180,7 +180,10 @@ class JudgeMetric:
     async def evaluate(self, trace: Trace, example: Example | None = None) -> Score:
         if self.id not in self.judge.applicable(example):
             return not_applicable("no reference answer")
-        verdict = (await self.judge.verdicts(trace, example))[self.id]
+        try:
+            verdict = (await self.judge.verdicts(trace, example))[self.id]
+        except ModelRefusal:
+            return not_applicable("the judge model declined to score this run")
         return Score(
             value=(verdict.score - 1) / 4,
             passed=verdict.score >= self._pass_at,

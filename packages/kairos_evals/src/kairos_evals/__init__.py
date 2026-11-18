@@ -12,6 +12,7 @@ from kairos_evals.models import (
     ChatMessage,
     JsonModel,
     ModelCassette,
+    ModelRefusal,
 )
 from kairos_evals.protocols import Metric, ResultSink, TraceFilter, TraceSource
 from kairos_evals.runner import HarnessAdapter, Suite, run_suite
@@ -62,6 +63,7 @@ __all__ = [
     "Metric",
     "MetricSummary",
     "ModelCassette",
+    "ModelRefusal",
     "OtlpJsonTraceSource",
     "PostgresSink",
     "ResultSink",

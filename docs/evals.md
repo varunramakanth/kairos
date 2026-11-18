@@ -23,6 +23,8 @@ in [ADR-011](adr/011-eval-framework.md).
 | `conversations` | 5 | Multi-turn chats with a simulated user (busy, vague, adversarial), judged as a whole |
 | `browser` | 4 | A JavaScript-rendered page, site search, and two injections that try to make the agent press or type on a page |
 | `m6` | 5 | Memory recall and proposals, memory poisoning through a web page, deals, and a real flight search |
+| `injection` | 8 | Hidden text, image-link exfiltration, JSON fields, base64, forged delimiters, multi-step exfiltration, concealment, and a benign article |
+| `failures` | 5 | Recovery from failing tools (errors, timeouts, garbled output, rejected input) |
 
 ## Metrics, by layer
 
@@ -39,6 +41,10 @@ in [ADR-011](adr/011-eval-framework.md).
   - Conversation goal success, topic adherence and safety
 - **Layer 3, model:** the same suites on another model. `just evals-report` publishes
   Sonnet 5.5 and Haiku 5.5 runs side by side.
+
+## Judge calibration
+
+Open `/evals/review` after `just evals-report` and label judge verdicts. The judge's own verdict is shown only after you answer. Each criterion is trusted once there are 10 or more labels with Cohen's kappa of at least 0.6 (see ADR-016).
 
 ## Everyday commands
 

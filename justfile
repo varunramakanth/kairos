@@ -101,6 +101,14 @@ record-evals *args:
 seed-evals *categories:
     LIVE=1 uv run python -m tests.evals.seed_cases {{ categories }}
 
+# Back up the database now to ~/Backups/kairos (the worker also does it nightly)
+backup:
+    uv run kairos backup
+
+# Restore a backup over the current database (stop the API and worker first)
+restore dump:
+    uv run kairos restore {{ dump }}
+
 # Apply database migrations to the local Postgres
 migrate:
     uv run kairos migrate

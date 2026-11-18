@@ -31,6 +31,7 @@ from kairos_scheduler.timing import next_fire
 from kairos_telemetry import TracingHooks, configure_tracing
 from kairos_tools.mcp import open_toolsets
 from kairos_worker.audit import AuditHooks
+from kairos_worker.backup import nightly
 from kairos_worker.settings import Settings
 from kairos_worker.spend import SpendCap, SpendCapHooks
 from kairos_worker.wiring import (
@@ -236,6 +237,16 @@ async def work(
             )
             group.create_task(dispatcher.run_forever(stop))
             group.create_task(backfill_memories(memory_store(settings, engine)))
+            if settings.backups:
+                group.create_task(
+                    nightly(
+                        settings.backup_dir,
+                        stop,
+                        now=clock.now,
+                        timezone=settings.timezone,
+                        keep_days=settings.backup_keep_days,
+                    )
+                )
         log.info("worker_stopped")
 
 

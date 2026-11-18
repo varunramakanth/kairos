@@ -50,6 +50,10 @@ class Settings(BaseSettings):
     a month; one watch checking every 6 hours uses ~120."""
 
     # --- hardening (M7) -------------------------------------------------------------
+    backups: bool = True
+    """Nightly local database backups from the worker (after 03:00 local time)."""
+    backup_dir: Path = Field(default_factory=lambda: Path.home() / "Backups" / "kairos")
+    backup_keep_days: int = Field(default=14, ge=1)
     daily_spend_cap_usd: float | None = Field(default=5.0, gt=0)
     """Model spend per local day (``timezone``) after which runs and job firings stop
     until midnight, and the owner is notified once. Unset for no cap."""

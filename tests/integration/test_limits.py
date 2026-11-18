@@ -86,6 +86,7 @@ async def api(database_url: str, **overrides: Any) -> AsyncGenerator[httpx2.Asyn
         embedded_worker=False,
         email_provider=None,
         memory_embeddings="none",
+        backups=False,
         **overrides,
     )
     app = create_app(settings, provider_factory=lambda: ScriptedProvider([text_turn("hi")]))

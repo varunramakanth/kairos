@@ -14,6 +14,7 @@ import signal
 import sys
 import uuid
 from contextlib import suppress
+from datetime import datetime
 from pathlib import Path
 from typing import Annotated
 
@@ -28,6 +29,7 @@ from kairos_domain.events import RunEvent
 from kairos_domain.run import RunRequest
 from kairos_harness import InMemoryCheckpointer, Provider
 from kairos_harness.cassette import RecordingProvider, ReplayProvider
+from kairos_worker.backup import backup, restore
 from kairos_worker.service import open_runtime, work
 from kairos_worker.settings import Settings
 from kairos_worker.wiring import build_provider
@@ -126,6 +128,32 @@ def worker() -> None:
             await engine.dispose()
 
     asyncio.run(main())
+
+
+@app.command(name="backup")
+def backup_now() -> None:
+    """Dump the database to the backup directory now (and prune old dumps)."""
+    settings = Settings()
+    path = asyncio.run(
+        backup(
+            settings.backup_dir,
+            now=datetime.now().astimezone(),
+            keep_days=settings.backup_keep_days,
+        )
+    )
+    typer.echo(f"wrote {path}")
+
+
+@app.command(name="restore")
+def restore_dump(
+    dump: Annotated[Path, typer.Argument(help="A .dump file written by `kairos backup`.")],
+    yes: Annotated[bool, typer.Option("--yes", help="Skip the confirmation.")] = False,
+) -> None:
+    """Restore a dump over the current database. Stop the API and worker first."""
+    if not yes:
+        typer.confirm(f"Replace the current database with {dump.name}?", abort=True)
+    asyncio.run(restore(dump))
+    typer.echo(f"restored {dump.name}")
 
 
 @app.command(name="vapid-keys")

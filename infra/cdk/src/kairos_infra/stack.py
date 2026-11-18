@@ -1,21 +1,22 @@
 """The lean Kairos production stack (ADR-017).
 
-    browser ──HTTPS──▶ CloudFront ──HTTP + secret header──▶ ALB ──▶ Fargate: web (Next.js)
-                        │  /api/*                                └▶ Fargate: api + worker
-                        │                                              │
-                        └ default cert (*.cloudfront.net)              ▼
-                                                              RDS Postgres (isolated)
+    browser ──HTTPS──▶ CloudFront ──VPC origin──▶ internal ALB ──▶ one Fargate task (ARM64)
+                        │                                      ├ /api/*  ▶ api + worker :8000
+                        └ default cert (*.cloudfront.net)      └ else    ▶ web (Next.js) :3000
+                                                                              │
+                                                                RDS Postgres (isolated)
 
 Choices, all for one user at the lowest sensible cost:
 
 - **No NAT gateway.** Tasks run in public subnets with public IPs (needed to reach the
   Anthropic API, ECR and Secrets Manager), but their security group only admits the
   load balancer. The database sits in isolated subnets with no route out at all.
-- **The ALB only answers CloudFront.** CloudFront adds a secret header; every ALB rule
-  requires it, and anything else gets a 403. (No domain means no certificate for the
-  ALB, so CloudFront terminates HTTPS with its default certificate.)
-- **One task runs the API and the worker** (``KAIROS_EMBEDDED_WORKER``). Leases make it
-  safe to run more later.
+- **The ALB is internal.** CloudFront reaches it through a VPC origin, so it has no
+  public address and nothing on the internet can call it directly. (No domain means no
+  certificate, so CloudFront terminates HTTPS with its default one.)
+- **One task, two containers**: the API with its embedded worker
+  (``KAIROS_EMBEDDED_WORKER``) and the web UI, on Graviton (ARM64), which is cheaper.
+  Leases make it safe to split or scale out later.
 - **Sign-in is Cognito** (MFA required, no self sign-up), checked by the API itself.
 """
 
@@ -58,7 +59,6 @@ APP_SECRET_KEYS = (
     "KAIROS_VAPID_PRIVATE_KEY",
 )
 """Filled in after the first deploy (runbook); empty values leave a feature off."""
-ORIGIN_HEADER = "X-Kairos-Origin"
 REPO_ROOT = Path(__file__).resolve().parents[4]
 """Docker build context for both images (``.dockerignore`` applies)."""
 
@@ -74,6 +74,9 @@ class Config:
     with_browser: bool = False
     timezone: str = "America/Toronto"
     daily_spend_cap_usd: float = 5.0
+    availability_zones: tuple[str, ...] = ()
+    """Two AZ names to use. Empty: the first two of the account's. CloudFront VPC origins
+    do not support the AZ with ID ``cac1-az3``; set this if your first two include it."""
 
 
 class KairosStack(Stack):
@@ -93,10 +96,12 @@ class KairosStack(Stack):
         vpc = ec2.Vpc(
             self,
             "Vpc",
-            max_azs=2,
+            max_azs=None if config.availability_zones else 2,
+            availability_zones=list(config.availability_zones) or None,
             nat_gateways=0,
             subnet_configuration=[
                 ec2.SubnetConfiguration(name="public", subnet_type=ec2.SubnetType.PUBLIC),
+                ec2.SubnetConfiguration(name="edge", subnet_type=ec2.SubnetType.PRIVATE_ISOLATED),
                 ec2.SubnetConfiguration(name="data", subnet_type=ec2.SubnetType.PRIVATE_ISOLATED),
             ],
         )
@@ -125,7 +130,7 @@ class KairosStack(Stack):
             ),
             instance_type=ec2.InstanceType.of(ec2.InstanceClass.T4G, ec2.InstanceSize.MICRO),
             vpc=vpc,
-            vpc_subnets=ec2.SubnetSelection(subnet_type=ec2.SubnetType.PRIVATE_ISOLATED),
+            vpc_subnets=ec2.SubnetSelection(subnet_group_name="data"),
             security_groups=[db_sg],
             database_name="kairos",
             credentials=rds.Credentials.from_generated_secret(
@@ -143,6 +148,7 @@ class KairosStack(Stack):
             cloudwatch_logs_exports=["postgresql"],
         )
         assert db.secret is not None  # noqa: S101  # from_generated_secret always sets it
+        db_secret = db.secret
 
         # --- secrets the owner fills in (API keys) ---------------------------------
         app_secret = secretsmanager.Secret(
@@ -195,30 +201,33 @@ class KairosStack(Stack):
             removal_policy=RemovalPolicy.DESTROY,
         )
         alb = elbv2.ApplicationLoadBalancer(
-            self, "Alb", vpc=vpc, internet_facing=True, security_group=alb_sg
-        )
-        origin_secret = secretsmanager.Secret(
             self,
-            "OriginSecret",
-            description="Header value CloudFront sends to the ALB",
-            generate_secret_string=secretsmanager.SecretStringGenerator(
-                exclude_punctuation=True, password_length=40
+            "Alb",
+            vpc=vpc,
+            internet_facing=False,
+            security_group=alb_sg,
+            vpc_subnets=ec2.SubnetSelection(subnet_group_name="edge"),
+        )
+
+        task = ecs.FargateTaskDefinition(
+            self,
+            "Task",
+            cpu=512,
+            memory_limit_mib=2560 if config.with_browser else 1536,
+            runtime_platform=ecs.RuntimePlatform(
+                cpu_architecture=ecs.CpuArchitecture.ARM64,
+                operating_system_family=ecs.OperatingSystemFamily.LINUX,
             ),
         )
-        origin_value = origin_secret.secret_value.unsafe_unwrap()
-
-        api_task = ecs.FargateTaskDefinition(
-            self, "ApiTask", cpu=512, memory_limit_mib=2048 if config.with_browser else 1024
-        )
-        api_task.add_to_task_role_policy(self._ses_send_only(config.owner_email))
-        api_container = api_task.add_container(
+        task.add_to_task_role_policy(self._ses_send_only(config.owner_email))
+        api_container = task.add_container(
             "api",
             image=ecs.ContainerImage.from_asset(
                 str(REPO_ROOT),
                 file="infra/docker/api.Dockerfile",
                 build_args={"WITH_BROWSER": "true" if config.with_browser else "false"},
                 ignore_mode=IgnoreMode.DOCKER,
-                platform=Platform.LINUX_AMD64,
+                platform=Platform.LINUX_ARM64,
             ),
             logging=ecs.LogDrivers.aws_logs(stream_prefix="api", log_group=logs_group),
             environment={
@@ -238,8 +247,8 @@ class KairosStack(Stack):
                 "DB_NAME": "kairos",
             },
             secrets={
-                "DB_USER": ecs.Secret.from_secrets_manager(db.secret, "username"),
-                "DB_PASSWORD": ecs.Secret.from_secrets_manager(db.secret, "password"),
+                "DB_USER": ecs.Secret.from_secrets_manager(db_secret, "username"),
+                "DB_PASSWORD": ecs.Secret.from_secrets_manager(db_secret, "password"),
                 **{
                     key: ecs.Secret.from_secrets_manager(app_secret_ref, key)
                     for key in APP_SECRET_KEYS
@@ -252,64 +261,44 @@ class KairosStack(Stack):
                 " && kairos migrate && exec uvicorn --factory kairos_api.app:create_app"
                 " --host 0.0.0.0 --port 8000 --proxy-headers --forwarded-allow-ips '*'",
             ],
+            port_mappings=[ecs.PortMapping(container_port=8000)],
         )
-        api_container.add_port_mappings(ecs.PortMapping(container_port=8000))
-
-        web_task = ecs.FargateTaskDefinition(self, "WebTask", cpu=256, memory_limit_mib=512)
-        web_task.add_container(
+        task.add_container(
             "web",
             image=ecs.ContainerImage.from_asset(
                 str(REPO_ROOT),
                 file="infra/docker/web.Dockerfile",
                 ignore_mode=IgnoreMode.DOCKER,
-                platform=Platform.LINUX_AMD64,
+                platform=Platform.LINUX_ARM64,
             ),
             logging=ecs.LogDrivers.aws_logs(stream_prefix="web", log_group=logs_group),
             port_mappings=[ecs.PortMapping(container_port=3000)],
         )
 
-        public = ec2.SubnetSelection(subnet_type=ec2.SubnetType.PUBLIC)
-        api_service = ecs.FargateService(
+        service = ecs.FargateService(
             self,
-            "ApiService",
+            "Service",
             cluster=cluster,
-            task_definition=api_task,
+            task_definition=task,
             desired_count=1,
-            assign_public_ip=True,
-            vpc_subnets=public,
+            assign_public_ip=True,  # outbound to Anthropic, ECR, Secrets Manager; no NAT
+            vpc_subnets=ec2.SubnetSelection(subnet_group_name="public"),
             security_groups=[task_sg],
             circuit_breaker=ecs.DeploymentCircuitBreaker(rollback=True),
             min_healthy_percent=0,  # one task: replace rather than run two workers
             max_healthy_percent=100,
         )
-        web_service = ecs.FargateService(
-            self,
-            "WebService",
-            cluster=cluster,
-            task_definition=web_task,
-            desired_count=1,
-            assign_public_ip=True,
-            vpc_subnets=public,
-            security_groups=[task_sg],
-            circuit_breaker=ecs.DeploymentCircuitBreaker(rollback=True),
-        )
         db.connections.allow_default_port_from(task_sg)
 
-        # --- load balancer: only requests carrying CloudFront's secret header --------
-        listener = alb.add_listener(
-            "Http",
-            port=80,
-            open=False,
-            default_action=elbv2.ListenerAction.fixed_response(403, message_body="Forbidden"),
-        )
-        verified = elbv2.ListenerCondition.http_header(ORIGIN_HEADER, [origin_value])
+        # --- load balancer: /api/* to the API container, the rest to the web one -----
+        listener = alb.add_listener("Http", port=80, open=False)
         api_targets = elbv2.ApplicationTargetGroup(
             self,
             "ApiTargets",
             vpc=vpc,
             port=8000,
             protocol=elbv2.ApplicationProtocol.HTTP,
-            targets=[api_service],
+            targets=[service.load_balancer_target(container_name="api", container_port=8000)],
             health_check=elbv2.HealthCheck(path="/api/health", healthy_http_codes="200"),
             deregistration_delay=Duration.seconds(10),
         )
@@ -319,30 +308,25 @@ class KairosStack(Stack):
             vpc=vpc,
             port=3000,
             protocol=elbv2.ApplicationProtocol.HTTP,
-            targets=[web_service],
+            targets=[service.load_balancer_target(container_name="web", container_port=3000)],
             health_check=elbv2.HealthCheck(path="/", healthy_http_codes="200"),
             deregistration_delay=Duration.seconds(10),
         )
-        listener.add_action(
+        listener.add_target_groups("Web", target_groups=[web_targets])
+        listener.add_target_groups(
             "Api",
             priority=10,
-            conditions=[verified, elbv2.ListenerCondition.path_patterns(["/api/*"])],
-            action=elbv2.ListenerAction.forward([api_targets]),
-        )
-        listener.add_action(
-            "Web",
-            priority=20,
-            conditions=[verified],
-            action=elbv2.ListenerAction.forward([web_targets]),
+            conditions=[elbv2.ListenerCondition.path_patterns(["/api/*"])],
+            target_groups=[api_targets],
         )
         # Streams (SSE) stay open; FastAPI pings every 15 s, inside the 60 s idle timeout.
         alb.set_attribute("idle_timeout.timeout_seconds", "60")
 
         # --- CloudFront: HTTPS for the browser, one origin for web and API -------------
-        alb_origin = origins.HttpOrigin(
-            alb.load_balancer_dns_name,
+        alb_origin = origins.VpcOrigin.with_application_load_balancer(
+            alb,
+            http_port=80,
             protocol_policy=cloudfront.OriginProtocolPolicy.HTTP_ONLY,
-            custom_headers={ORIGIN_HEADER: origin_value},
             read_timeout=Duration.seconds(60),
         )
         no_cache = cloudfront.BehaviorOptions(

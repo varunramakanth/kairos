@@ -1,17 +1,17 @@
 """Offline assertions on the synthesized production template (no AWS calls).
 
 These pin the properties that keep the stack cheap and closed: no NAT gateway, a
-private database that survives deletion, an ALB that only answers CloudFront, Cognito
-with MFA and no self sign-up, and least-privilege email sending.
+private database that survives deletion, one ARM64 task, an internal ALB that only
+CloudFront reaches, Cognito with MFA and no self sign-up, and least-privilege email.
 """
 
 from typing import Any
 
 import pytest
 from aws_cdk import App, Environment
-from aws_cdk.assertions import Match, Template
+from aws_cdk.assertions import Template
 
-from kairos_infra.stack import ORIGIN_HEADER, Config, KairosStack
+from kairos_infra.stack import Config, KairosStack
 
 OWNER = "owner@example.com"
 
@@ -34,13 +34,23 @@ def only(template: Template, kind: str) -> dict[str, Any]:
     return next(iter(resources.values()))["Properties"]
 
 
-def test_no_nat_gateway_and_tasks_get_public_ips(template: Template) -> None:
+def test_no_nat_gateway_and_one_public_task(template: Template) -> None:
     template.resource_count_is("AWS::EC2::NatGateway", 0)
-    services = template.find_resources("AWS::ECS::Service")
-    assert len(services) == 2
-    for service in services.values():
-        network = service["Properties"]["NetworkConfiguration"]["AwsvpcConfiguration"]
-        assert network["AssignPublicIp"] == "ENABLED"
+    service = only(template, "AWS::ECS::Service")
+    network = service["NetworkConfiguration"]["AwsvpcConfiguration"]
+    assert network["AssignPublicIp"] == "ENABLED"
+    assert service["DesiredCount"] == 1
+    assert service["DeploymentConfiguration"]["MinimumHealthyPercent"] == 0
+    assert service["DeploymentConfiguration"]["MaximumPercent"] == 100
+    ports = {(lb["ContainerName"], lb["ContainerPort"]) for lb in service["LoadBalancers"]}
+    assert ports == {("api", 8000), ("web", 3000)}
+
+
+def test_task_is_arm64_with_both_containers(template: Template) -> None:
+    task = only(template, "AWS::ECS::TaskDefinition")
+    assert task["RuntimePlatform"]["CpuArchitecture"] == "ARM64"
+    assert (task["Cpu"], task["Memory"]) == ("512", "1536")
+    assert {c["Name"] for c in task["ContainerDefinitions"]} == {"api", "web"}
 
 
 def test_database_is_private_encrypted_and_protected(template: Template) -> None:
@@ -57,29 +67,15 @@ def test_database_is_private_encrypted_and_protected(template: Template) -> None
     assert resource["DeletionPolicy"] == "Snapshot"
 
 
-def test_alb_answers_only_requests_with_the_origin_header(template: Template) -> None:
-    template.has_resource_properties(
-        "AWS::ElasticLoadBalancingV2::Listener",
-        {
-            "Port": 80,
-            "DefaultActions": [
-                Match.object_like(
-                    {
-                        "Type": "fixed-response",
-                        "FixedResponseConfig": Match.object_like({"StatusCode": "403"}),
-                    }
-                )
-            ],
-        },
-    )
-    rules = template.find_resources("AWS::ElasticLoadBalancingV2::ListenerRule")
-    assert len(rules) == 2
-    for rule in rules.values():
-        fields = [
-            c.get("HttpHeaderConfig", {}).get("HttpHeaderName")
-            for c in rule["Properties"]["Conditions"]
-        ]
-        assert ORIGIN_HEADER in fields
+def test_alb_is_internal_and_routes_api_by_path(template: Template) -> None:
+    alb = only(template, "AWS::ElasticLoadBalancingV2::LoadBalancer")
+    assert alb["Scheme"] == "internal"
+    listener = only(template, "AWS::ElasticLoadBalancingV2::Listener")
+    assert listener["Port"] == 80
+    assert listener["DefaultActions"][0]["Type"] == "forward"
+    rule = only(template, "AWS::ElasticLoadBalancingV2::ListenerRule")
+    (condition,) = rule["Conditions"]
+    assert condition["PathPatternConfig"]["Values"] == ["/api/*"]
 
 
 def test_alb_ingress_is_cloudfront_prefix_list_only(template: Template) -> None:
@@ -98,12 +94,14 @@ def test_alb_ingress_is_cloudfront_prefix_list_only(template: Template) -> None:
     assert ingress[0]["FromPort"] == ingress[0]["ToPort"] == 80
 
 
-def test_cloudfront_redirects_to_https_and_sends_the_header(template: Template) -> None:
+def test_cloudfront_redirects_to_https_and_uses_a_vpc_origin(template: Template) -> None:
     props = only(template, "AWS::CloudFront::Distribution")["DistributionConfig"]
     assert props["DefaultCacheBehavior"]["ViewerProtocolPolicy"] == "redirect-to-https"
     (origin,) = props["Origins"]
-    assert origin["CustomOriginConfig"]["OriginProtocolPolicy"] == "http-only"
-    assert origin["OriginCustomHeaders"][0]["HeaderName"] == ORIGIN_HEADER
+    assert "VpcOriginConfig" in origin
+    assert "CustomOriginConfig" not in origin
+    vpc_origin = only(template, "AWS::CloudFront::VpcOrigin")["VpcOriginEndpointConfig"]
+    assert vpc_origin["OriginProtocolPolicy"] == "http-only"
     paths = {b["PathPattern"] for b in props["CacheBehaviors"]}
     assert paths == {"/api/*", "/_next/static/*"}
 
@@ -135,16 +133,7 @@ def test_task_may_send_email_only_to_and_from_the_owner(template: Template) -> N
     }
 
 
-def test_api_runs_one_task_with_secrets_injected(template: Template) -> None:
-    template.has_resource_properties(
-        "AWS::ECS::Service",
-        {
-            "DesiredCount": 1,
-            "DeploymentConfiguration": Match.object_like(
-                {"MinimumHealthyPercent": 0, "MaximumPercent": 100}
-            ),
-        },
-    )
+def test_api_secrets_are_injected_not_plain_environment(template: Template) -> None:
     tasks = template.find_resources("AWS::ECS::TaskDefinition")
     containers = {
         c["Name"]: c for t in tasks.values() for c in t["Properties"]["ContainerDefinitions"]

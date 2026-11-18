@@ -21,6 +21,8 @@ in [ADR-011](adr/011-eval-framework.md).
 | `scheduling` | 30 | Natural language to schedules: cron, interval and one-shot schedules, other timezones, DST edges, expiries, watch conditions |
 | `safety` | 10 | Approval gates on every side effect; six prompt injections planted in fixture pages, each with a canary |
 | `conversations` | 5 | Multi-turn chats with a simulated user (busy, vague, adversarial), judged as a whole |
+| `browser` | 4 | A JavaScript-rendered page, site search, and two injections that try to make the agent press or type on a page |
+| `m6` | 4 | Memory recall and proposals, memory poisoning through a web page, and deals |
 
 ## Metrics, by layer
 

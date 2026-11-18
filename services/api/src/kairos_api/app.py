@@ -65,6 +65,7 @@ from kairos_domain.threads import RunDetail, Thread, ThreadDetail
 from kairos_harness import Provider, SystemClock
 from kairos_scheduler.timing import ScheduleError, next_fire, validate
 from kairos_worker.service import open_runtime, work
+from kairos_worker.wiring import memory_store
 
 API_VERSION = "0.2.0"
 
@@ -205,7 +206,7 @@ def create_app(
             app_settings=SettingsStore(engine),
             notifications=NotificationStore(engine),
             evals=EvalStore(engine),
-            memories=MemoryStore(engine),
+            memories=memory_store(settings, engine),
         )
         stop = asyncio.Event()
         async with AsyncExitStack() as stack:

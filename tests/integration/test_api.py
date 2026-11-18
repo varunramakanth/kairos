@@ -38,6 +38,7 @@ async def api(
         email_to=None,
         vapid_public_key=None,
         vapid_private_key=None,
+        memory_embeddings="none",  # keyword recall; tests never load a model
     )
     app: FastAPI = create_app(settings, provider_factory=lambda: provider)
     async with app.router.lifespan_context(app):

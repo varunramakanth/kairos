@@ -1,4 +1,6 @@
-"""Memory on Postgres: keyword recall, proposals, confirmation and the API."""
+"""Memory on Postgres: hybrid recall, proposals, confirmation and the API."""
+
+from collections.abc import Sequence
 
 import pytest
 from sqlalchemy import text
@@ -106,3 +108,102 @@ async def test_the_browser_may_delete_memories_cross_origin(database_url: str) -
         )
     assert preflight.status_code == 200
     assert "DELETE" in preflight.headers["access-control-allow-methods"]
+
+
+class TopicEmbedder:
+    """Hand-made vectors: each text maps to a topic axis, so meaning, not shared words,
+    decides similarity. Stands in for a real model in this test."""
+
+    name = "topics-v1"
+    TOPICS = ("seat", "food", "weather")
+
+    def _vector(self, text: str) -> list[float]:
+        lowered = text.lower()
+        hits = {
+            "seat": any(w in lowered for w in ("aisle", "sit", "plane", "seat")),
+            "food": any(w in lowered for w in ("vegetarian", "eat", "dinner")),
+            "weather": "rain" in lowered,
+        }
+        vector = [1.0 if hits[t] else 0.0 for t in self.TOPICS] + [0.0] * 381
+        if not any(vector):
+            vector[383] = 1.0  # an unrelated direction
+        return vector
+
+    async def embed_documents(self, texts: Sequence[str]) -> list[list[float]]:
+        return [self._vector(t) for t in texts]
+
+    async def embed_query(self, text: str) -> list[float]:
+        return self._vector(text)
+
+
+async def test_semantic_recall_finds_meaning_without_shared_words(engine: AsyncEngine) -> None:
+    store = MemoryStore(engine, embedder=TopicEmbedder())
+    aisle = await store.create(
+        "Prefers aisle seats on long flights",
+        MemoryKind.PREFERENCE,
+        source=MemorySource.USER,
+        status=MemoryStatus.ACTIVE,
+    )
+    await store.create(
+        "Is vegetarian", MemoryKind.PREFERENCE, source=MemorySource.USER, status=MemoryStatus.ACTIVE
+    )
+    # No word in common with the memory; only the vectors match.
+    assert [m.id for m in await store.search("where do I like to sit on a plane")] == [aisle.id]
+    # Below the similarity threshold, nothing comes back.
+    assert await store.search("quarterly tax deadlines") == []
+
+
+async def test_memories_saved_without_a_model_are_backfilled(engine: AsyncEngine) -> None:
+    plain = MemoryStore(engine)
+    memory = await plain.create(
+        "Prefers aisle seats",
+        MemoryKind.PREFERENCE,
+        source=MemorySource.USER,
+        status=MemoryStatus.ACTIVE,
+    )
+
+    class Broken(TopicEmbedder):
+        async def embed_documents(self, texts: Sequence[str]) -> list[list[float]]:
+            raise RuntimeError("model not downloaded")
+
+    broken = MemoryStore(engine, embedder=Broken())
+    kept = await broken.create(
+        "Is vegetarian",
+        MemoryKind.PREFERENCE,
+        source=MemorySource.USER,
+        status=MemoryStatus.ACTIVE,
+    )
+    assert kept.content == "Is vegetarian"  # stored anyway, without a vector
+
+    store = MemoryStore(engine, embedder=TopicEmbedder())
+    assert await store.backfill() == 2
+    assert await store.backfill() == 0
+    assert [m.id for m in await store.search("where do I sit on a plane")] == [memory.id]
+
+
+def _model_cached() -> bool:
+    from kairos_memory.embeddings import default_cache
+
+    return any(default_cache().glob("*bge-small-en-v1.5*"))
+
+
+@pytest.mark.skipif(not _model_cached(), reason="local embedding model not downloaded")
+async def test_the_local_model_recalls_by_meaning(engine: AsyncEngine) -> None:
+    from kairos_memory.embeddings import LocalEmbedder
+
+    store = MemoryStore(engine, embedder=LocalEmbedder())
+    seat = await store.create(
+        "Prefers aisle seats on long flights",
+        MemoryKind.PREFERENCE,
+        source=MemorySource.USER,
+        status=MemoryStatus.ACTIVE,
+    )
+    await store.create(
+        "Is vegetarian and avoids fish",
+        MemoryKind.PREFERENCE,
+        source=MemorySource.USER,
+        status=MemoryStatus.ACTIVE,
+    )
+    found = await store.search("where do I like to sit on an airplane")
+    assert found
+    assert found[0].id == seat.id

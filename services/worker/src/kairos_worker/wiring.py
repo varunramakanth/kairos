@@ -2,12 +2,14 @@
 
 import sys
 from dataclasses import dataclass
+from functools import cache
 
 import httpx2
 import structlog
 from sqlalchemy.ext.asyncio import AsyncEngine
 
 from kairos_db import Lease, PostgresCheckpointer
+from kairos_db.memories import MemoryStore
 from kairos_domain.tools import ToolRisk
 from kairos_harness import (
     AgentLoop,
@@ -21,6 +23,7 @@ from kairos_harness import (
 )
 from kairos_harness.cassette import ReplayProvider
 from kairos_harness.subagents import SubagentProfile, Subagents
+from kairos_memory.embeddings import Embedder, LocalEmbedder
 from kairos_memory.protocols import MemoryRepository
 from kairos_memory.tools import memory_tools
 from kairos_notify.tools import Enqueue, notify_tool
@@ -112,6 +115,16 @@ def build_tools(
         for item in memory_tools(memory):
             tools.register(item)
     return tools
+
+
+@cache
+def shared_embedder(kind: str) -> Embedder | None:
+    """One embedding model per process, shared by the API and an embedded worker."""
+    return LocalEmbedder() if kind == "local" else None
+
+
+def memory_store(settings: Settings, engine: AsyncEngine) -> MemoryStore:
+    return MemoryStore(engine, embedder=shared_embedder(settings.memory_embeddings))
 
 
 SUBAGENT_PROFILES = (

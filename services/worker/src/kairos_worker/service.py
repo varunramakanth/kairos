@@ -38,6 +38,7 @@ from kairos_worker.wiring import (
     build_tools,
     http_client,
     mcp_configs,
+    memory_store,
 )
 from kairos_worker.worker import Worker
 
@@ -81,7 +82,7 @@ async def open_runtime(
     tracer_provider, tracing_hooks = tracing(settings, provider)
     async with http_client() as http, AsyncExitStack() as stack:
         try:
-            memories = MemoryStore(engine) if engine is not None else None
+            memories = memory_store(settings, engine) if engine is not None else None
             if engine is None:
                 tools = build_tools(settings, http, clock=clock)
             else:
@@ -225,4 +226,14 @@ async def work(
                 scheduler.run_forever(stop, poll_seconds=settings.scheduler_poll_seconds)
             )
             group.create_task(dispatcher.run_forever(stop))
+            group.create_task(backfill_memories(memory_store(settings, engine)))
         log.info("worker_stopped")
+
+
+async def backfill_memories(store: MemoryStore) -> None:
+    """Embed memories saved before the model was available. Best effort, once."""
+    try:
+        if done := await store.backfill():
+            log.info("memories_backfilled", count=done)
+    except Exception as error:
+        log.warning("memory_backfill_failed", error=str(error))

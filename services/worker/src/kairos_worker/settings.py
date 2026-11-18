@@ -47,6 +47,9 @@ class Settings(BaseSettings):
     # --- subagents and memory (M6) ----------------------------------------------------
     subagent_model: str = "claude-sonnet-5-5"
     """Model for ``delegate`` children (focused, read-only research)."""
+    memory_embeddings: Literal["local", "none"] = "local"
+    """``local``: semantic recall with a small model on this machine (downloaded once,
+    about 67 MB, into ~/.cache/kairos/models). ``none``: keyword recall only."""
     memory_reflection: bool = False
     """After each completed chat turn, ask ``job_model`` to propose memories from it
     (one small model call per turn). Proposals wait for the user's confirmation."""

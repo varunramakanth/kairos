@@ -7,6 +7,7 @@ dependencies = [
     "kairos-domain",
     "kairos-harness",
     "kairos-tools",
+    "fastembed>=0.9,<0.10",
     "pydantic>=2.11",
     "structlog>=25.4",
 ]

@@ -6,7 +6,9 @@ requires-python = ">=3.12"
 dependencies = [
     "httpx2>=2.16",
     "kairos-domain",
+    "mcp>=2.3,<3",
     "pydantic>=2.11",
+    "structlog>=25.4",
     "trafilatura>=2.3",
 ]
 

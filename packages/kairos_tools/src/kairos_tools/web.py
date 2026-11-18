@@ -197,6 +197,11 @@ async def _read_capped(response: httpx2.Response) -> str:
     return b"".join(chunks)[:MAX_BYTES].decode(response.encoding or "utf-8", errors="replace")
 
 
+def html_to_markdown(raw: str, *, url: str) -> str:
+    """Main text of an HTML page as Markdown with links (also used by the browser)."""
+    return _to_markdown(raw, url=url, content_type="text/html")
+
+
 def _to_markdown(raw: str, *, url: str, content_type: str) -> str:
     if content_type in ("text/plain", "application/json"):
         return f"URL: {url}\n\n{raw}"

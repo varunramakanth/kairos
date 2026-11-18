@@ -189,17 +189,26 @@ export function applyEvent(view: TurnView, event: RunEvent): TurnView {
       return { ...next, finished: null };
     case "model_call_finished":
       return { ...next, costUsd: next.costUsd + event.cost_usd };
-    case "run_finished":
-      return {
-        ...withItems(
-          next,
-          next.items.map((i) =>
-            i.kind === "text" && i.streaming ? { ...i, streaming: false } : i,
+    case "run_finished": {
+      let items = next.items.map((i) =>
+        i.kind === "text" && i.streaming ? { ...i, streaming: false } : i,
+      );
+      const summary = pauseSummary(event, items);
+      if (summary !== null) {
+        // The harness's own account of what is waiting replaces the per-call notices.
+        items = [
+          ...items.filter(
+            (i) => !(i.kind === "notice" && i.id.startsWith("approval-")),
           ),
-        ),
+          { kind: "notice", id: `paused-${seq ?? "live"}`, text: summary },
+        ];
+      }
+      return {
+        ...withItems(next, items),
         finished: event,
         costUsd: event.cost_usd,
       };
+    }
     default:
       return next;
   }
@@ -260,6 +269,18 @@ function readPlan(input: Record<string, unknown>): PlanItem[] | null {
       return [];
     return [{ step, status }];
   });
+}
+
+/**
+ * When a run pauses for approval after a step in which the model said nothing, the
+ * harness writes what is waiting into ``output_text``. Shown unless the model's own
+ * words already said it.
+ */
+function pauseSummary(event: RunFinished, items: TurnItem[]): string | null {
+  const text = event.output_text?.trim();
+  if (event.stop_reason !== "awaiting_approval" || !text) return null;
+  const spoken = items.some((i) => i.kind === "text" && i.text.trim() === text);
+  return spoken ? null : text;
 }
 
 function approvalText(event: ApprovalRequested): string {

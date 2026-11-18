@@ -205,6 +205,51 @@ describe("pause and resume", () => {
     expect(tool?.kind === "tool" && tool.call.status).toBe("awaiting_approval");
   });
 
+  it("shows what a silent pause is waiting on instead of per-call notices", () => {
+    const summary =
+      "Waiting for your approval before I go ahead:\n- notify_me (title: Laundry)";
+    const view = buildTurn([
+      durable(0, {
+        type: "approval_requested",
+        tool_call_id: "t1",
+        name: "notify_me",
+        reason: "r",
+        input: {},
+        risk: "write_external",
+      }),
+      durable(1, {
+        type: "run_finished",
+        stop_reason: "awaiting_approval",
+        output_text: summary,
+        error: null,
+        usage,
+        cost_usd: 0,
+      }),
+    ]);
+    expect(view.items.filter((i) => i.kind === "notice")).toEqual([
+      { kind: "notice", id: "paused-1", text: summary },
+    ]);
+  });
+
+  it("does not repeat the model's own words as a pause notice", () => {
+    const view = buildTurn([
+      durable(0, {
+        type: "text_message_end",
+        message_id: "m",
+        text: "I'll send it once you approve.",
+      }),
+      durable(1, {
+        type: "run_finished",
+        stop_reason: "awaiting_approval",
+        output_text: "I'll send it once you approve.",
+        error: null,
+        usage,
+        cost_usd: 0,
+      }),
+    ]);
+    expect(view.items.map((i) => i.kind)).toEqual(["text"]);
+  });
+
   it("is live again after a paused run resumes", () => {
     const paused = buildTurn([
       durable(0, {

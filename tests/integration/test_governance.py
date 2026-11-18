@@ -37,6 +37,12 @@ async def api(
         embedded_worker=True,
         poll_seconds=0.05,
         scheduler_poll_seconds=0.05,
+        # Pinned off: `just` loads the developer's .env into the environment, and these
+        # tests must never see (or send through) a real email or push setup.
+        email_provider=None,
+        email_to=None,
+        vapid_public_key=None,
+        vapid_private_key=None,
     )
     app = create_app(settings, provider_factory=lambda: provider)
     async with app.router.lifespan_context(app):

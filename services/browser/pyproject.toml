@@ -1,11 +1,20 @@
 [project]
 name = "kairos-browser"
 version = "0.1.0"
-description = "Token-protected Playwright browser service."
+description = "Isolated Playwright browser exposed as an MCP server: accessibility snapshots, public addresses only."
 requires-python = ">=3.12"
 dependencies = [
+    "kairos-tools",
+    "mcp>=2.3,<3",
+    "playwright>=1.65,<2",
 ]
+
+[project.scripts]
+kairos-browser = "kairos_browser.server:main"
 
 [build-system]
 requires = ["uv_build>=0.9,<0.13"]
 build-backend = "uv_build"
+
+[tool.uv.sources]
+kairos-tools = { workspace = true }

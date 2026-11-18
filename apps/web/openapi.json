@@ -1357,6 +1357,28 @@
         }
       }
     },
+    "/setup/status": {
+      "get": {
+        "tags": [
+          "settings"
+        ],
+        "summary": "Get Setup Status",
+        "description": "Which features are configured, for the Welcome checklist. Presence only.",
+        "operationId": "get_setup_status",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SetupStatus"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/settings/kill-switch": {
       "put": {
         "tags": [
@@ -4088,6 +4110,62 @@
             "one_shot": "#/components/schemas/OneShotSchedule"
           }
         }
+      },
+      "SetupItem": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "ok": {
+            "type": "boolean",
+            "title": "Ok"
+          },
+          "detail": {
+            "type": "string",
+            "title": "Detail"
+          },
+          "required": {
+            "type": "boolean",
+            "title": "Required",
+            "default": false
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "label",
+          "ok",
+          "detail"
+        ],
+        "title": "SetupItem"
+      },
+      "SetupStatus": {
+        "properties": {
+          "demo": {
+            "type": "boolean",
+            "title": "Demo"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/SetupItem"
+            },
+            "type": "array",
+            "title": "Items"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "demo",
+          "items"
+        ],
+        "title": "SetupStatus"
       },
       "StepFinished": {
         "properties": {

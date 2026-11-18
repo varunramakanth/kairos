@@ -39,7 +39,7 @@ export function RunTrace({ params }: { params: Promise<{ runId: string }> }) {
       : 0;
 
   return (
-    <div className="mx-auto w-full max-w-5xl space-y-6 overflow-y-auto px-6 py-6">
+    <div className="mx-auto w-full max-w-5xl space-y-6 overflow-y-auto px-4 md:px-6 py-6">
       <header className="space-y-1">
         <div className="text-muted-foreground text-sm">
           {run.thread_id ? (
@@ -75,7 +75,7 @@ export function RunTrace({ params }: { params: Promise<{ runId: string }> }) {
       <section>
         <h2 className="mb-2 font-medium">Timeline</h2>
         <div className="overflow-x-auto rounded-lg border">
-          <table className="w-full text-sm">
+          <table className="w-full min-w-[36rem] text-sm">
             <thead className="bg-muted/50 text-left text-muted-foreground text-xs">
               <tr>
                 <th className="px-3 py-2 font-normal">+s</th>

@@ -34,7 +34,7 @@ export default function EvalsPage() {
   const latest = runs ? latestRuns(runs) : [];
 
   return (
-    <div className="mx-auto w-full max-w-5xl space-y-6 overflow-y-auto px-6 py-6">
+    <div className="mx-auto w-full max-w-5xl space-y-6 overflow-y-auto px-4 md:px-6 py-6">
       <header>
         <h1 className="font-semibold text-xl">Evals</h1>
         <p className="text-muted-foreground text-sm">
@@ -103,33 +103,35 @@ function SuiteCard({
             <h3 className="mb-2 text-muted-foreground text-xs">
               {LAYER_LABELS[layer]}
             </h3>
-            <table className="w-full text-sm">
-              <tbody>
-                {metrics.map((m) => (
-                  <tr key={m.metric_id}>
-                    <td className="py-1 pr-3 font-mono text-xs">
-                      {m.metric_id}
-                      {m.kind === "llm_judge" && (
-                        <span className="ml-1.5 rounded bg-primary/10 px-1 text-primary">
-                          judge
-                        </span>
-                      )}
-                    </td>
-                    <td className="w-16 py-1 pr-3 text-right tabular-nums">
-                      {m.mean.toFixed(2)}
-                    </td>
-                    <td className="py-1 pr-3 text-muted-foreground text-xs">
-                      {formatMetric(m)} · n={m.n}
-                    </td>
-                    <td className="w-32 py-1">
-                      <Sparkline
-                        values={trend(all, run.suite, run.model, m.metric_id)}
-                      />
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[32rem] text-sm">
+                <tbody>
+                  {metrics.map((m) => (
+                    <tr key={m.metric_id}>
+                      <td className="py-1 pr-3 font-mono text-xs">
+                        {m.metric_id}
+                        {m.kind === "llm_judge" && (
+                          <span className="ml-1.5 rounded bg-primary/10 px-1 text-primary">
+                            judge
+                          </span>
+                        )}
+                      </td>
+                      <td className="w-16 py-1 pr-3 text-right tabular-nums">
+                        {m.mean.toFixed(2)}
+                      </td>
+                      <td className="py-1 pr-3 text-muted-foreground text-xs">
+                        {formatMetric(m)} · n={m.n}
+                      </td>
+                      <td className="w-32 py-1">
+                        <Sparkline
+                          values={trend(all, run.suite, run.model, m.metric_id)}
+                        />
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
         ))}
       </div>

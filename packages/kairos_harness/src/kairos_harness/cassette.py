@@ -17,6 +17,7 @@ import hashlib
 import json
 from collections.abc import AsyncIterator, Mapping, Sequence
 from pathlib import Path
+from typing import Any
 
 from pydantic import JsonValue
 
@@ -41,11 +42,27 @@ class CassetteEntry(DomainModel):
     summary: str
     """Human-readable hint about the request, for diffs and miss messages."""
     events: list[ModelEvent]
+    ignores_tool_output: bool = False
+    """The fingerprint was taken with tool results blanked (``fingerprint(...,
+    ignore_tool_output=True)``). Only the hand-written UI demo records this way: its
+    tools return ids and times that change on every run. Eval cassettes never do."""
 
 
-def fingerprint(request: ModelRequest) -> str:
-    """A stable hash of everything in the request that the model's answer depends on."""
-    canonical = json.dumps(request.model_dump(mode="json"), sort_keys=True, separators=(",", ":"))
+def fingerprint(request: ModelRequest, *, ignore_tool_output: bool = False) -> str:
+    """A stable hash of everything in the request that the model's answer depends on.
+
+    With ``ignore_tool_output`` the text of every tool result is left out, so a
+    scripted conversation still matches when a tool returns a fresh id or time.
+    """
+    data: dict[str, Any] = request.model_dump(mode="json")
+    if ignore_tool_output:
+        messages: list[dict[str, Any]] = data.get("messages", [])
+        for message in messages:
+            blocks: list[dict[str, Any]] = message.get("content", [])
+            for block in blocks:
+                if block.get("type") == "tool_result":
+                    block["content"] = ""
+    canonical = json.dumps(data, sort_keys=True, separators=(",", ":"))
     return hashlib.sha256(canonical.encode()).hexdigest()[:16]
 
 
@@ -65,9 +82,10 @@ def load_cassette(path: Path) -> list[CassetteEntry]:
 class RecordingProvider:
     """Wraps a provider and appends every completed model call to a cassette file."""
 
-    def __init__(self, inner: Provider, path: Path) -> None:
+    def __init__(self, inner: Provider, path: Path, *, ignore_tool_output: bool = False) -> None:
         self._inner = inner
         self._path = path
+        self._ignore_tool_output = ignore_tool_output
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text("")
 
@@ -84,7 +102,10 @@ class RecordingProvider:
                 # so code after the loop would never run. A failed stream never
                 # reaches this point and leaves no entry.
                 entry = CassetteEntry(
-                    fingerprint=fingerprint(request), summary=_summary(request), events=events
+                    fingerprint=fingerprint(request, ignore_tool_output=self._ignore_tool_output),
+                    summary=_summary(request),
+                    events=events,
+                    ignores_tool_output=self._ignore_tool_output,
                 )
                 with self._path.open("a") as file:
                     file.write(entry.model_dump_json() + "\n")
@@ -95,16 +116,18 @@ class ReplayProvider:
     """Serves model calls from a cassette. Never touches the network.
 
     Calls are matched by fingerprint. Identical requests are served in the order
-    they were recorded.
+    they were recorded. Entries recorded with ``ignores_tool_output`` match on the
+    loose fingerprint; a strict match is always tried first.
     """
 
     def __init__(self, path: Path, *, name: str = "replay") -> None:
         self._path = path
         self._name = name
-        self._queues: dict[str, list[CassetteEntry]] = {}
+        self._queues: dict[tuple[bool, str], list[CassetteEntry]] = {}
         self._entries = load_cassette(path)
         for entry in self._entries:
-            self._queues.setdefault(entry.fingerprint, []).append(entry)
+            key = (entry.ignores_tool_output, entry.fingerprint)
+            self._queues.setdefault(key, []).append(entry)
 
     @property
     def name(self) -> str:
@@ -112,7 +135,9 @@ class ReplayProvider:
 
     async def stream(self, request: ModelRequest) -> AsyncIterator[ModelEvent]:
         key = fingerprint(request)
-        queue = self._queues.get(key)
+        queue = self._queues.get((False, key)) or self._queues.get(
+            (True, fingerprint(request, ignore_tool_output=True))
+        )
         if not queue:
             recorded = "\n".join(f"  {e.fingerprint}  {e.summary}" for e in self._entries)
             raise CassetteMissError(

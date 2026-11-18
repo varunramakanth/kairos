@@ -9,6 +9,7 @@ Run it with ``just api`` (which also starts an embedded worker) or
 """
 
 import asyncio
+import os
 import uuid
 from collections.abc import AsyncGenerator, AsyncIterable, Callable
 from contextlib import AsyncExitStack, asynccontextmanager
@@ -27,6 +28,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine
 from kairos_api.auth import Authenticator, StripPrefix
 from kairos_api.limits import RateLimiter
 from kairos_api.settings import ApiSettings
+from kairos_api.setup import SetupStatus, setup_status
 from kairos_api.streams import run_event_stream
 from kairos_db import (
     EventListener,
@@ -661,6 +663,11 @@ def create_app(
     @app.get("/settings", tags=["settings"])
     async def get_settings(request: Request) -> AppSettings:
         return await current_settings(request)
+
+    @app.get("/setup/status", tags=["settings"])
+    async def get_setup_status() -> SetupStatus:
+        """Which features are configured, for the Welcome checklist. Presence only."""
+        return setup_status(settings, os.environ)
 
     @app.put("/settings/kill-switch", tags=["settings"])
     async def set_kill_switch(request: Request, body: KillSwitch) -> AppSettings:

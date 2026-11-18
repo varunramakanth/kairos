@@ -44,8 +44,8 @@ export default function TasksPage() {
   const active = jobs?.filter((j) => j.job.status === "active").length ?? 0;
 
   return (
-    <div className="mx-auto w-full max-w-5xl space-y-5 overflow-y-auto px-6 py-6">
-      <header className="flex items-center justify-between gap-4">
+    <div className="mx-auto w-full max-w-5xl space-y-5 overflow-y-auto px-4 md:px-6 py-6">
+      <header className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="font-semibold text-xl">Tasks &amp; watches</h1>
           <p className="text-muted-foreground text-sm">
@@ -82,7 +82,7 @@ export default function TasksPage() {
 
       {jobs && jobs.length > 0 && (
         <div className="overflow-x-auto rounded-lg border">
-          <table className="w-full text-sm">
+          <table className="w-full min-w-[36rem] text-sm">
             <thead className="bg-muted/50 text-left text-muted-foreground text-xs">
               <tr>
                 <th className="px-3 py-2 font-normal">Name</th>

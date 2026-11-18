@@ -16,7 +16,8 @@ Kairos is an always-on personal agent. `PLAN.md` is the source of truth for scop
 | `just test [pytest args]` | Offline tests (integration tests start Postgres via testcontainers; skipped without Docker) |
 | `just migrate` / `just worker` | Migrate the local DB / run the durable worker |
 | `just api` / `just web` | API on :8000 with an embedded worker / Next.js on :3000 |
-| `just api-demo` | API serving a scripted demo cassette: no API key, no cost |
+| `just api-demo` | API serving the scripted demo (`tests/e2e/demo.py`) in its own `kairos_demo` database: no API key, no cost |
+| `just record-demo` | Re-record the demo cassette after a prompt or tool change (free; `tests/e2e/test_demo.py` fails until you do) |
 | `uv run kairos vapid-keys` | Print a Web Push key pair to paste into `.env` |
 | `just gen-client` | Regenerate `apps/web/openapi.json` and the TS client after any API or event model change |
 | `just record-cassettes` | Rebuild the synthetic eval cassettes (free) |

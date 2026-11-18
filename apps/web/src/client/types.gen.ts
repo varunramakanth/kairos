@@ -1521,6 +1521,46 @@ export type Schedule = ({
 } & OneShotSchedule);
 
 /**
+ * SetupItem
+ */
+export type SetupItem = {
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * Label
+     */
+    label: string;
+    /**
+     * Ok
+     */
+    ok: boolean;
+    /**
+     * Detail
+     */
+    detail: string;
+    /**
+     * Required
+     */
+    required?: boolean;
+};
+
+/**
+ * SetupStatus
+ */
+export type SetupStatus = {
+    /**
+     * Demo
+     */
+    demo: boolean;
+    /**
+     * Items
+     */
+    items: Array<SetupItem>;
+};
+
+/**
  * StepFinished
  *
  * The step's model call and its whole tool batch are done and checkpointed.
@@ -2973,6 +3013,22 @@ export type GetSettingsResponses = {
 };
 
 export type GetSettingsResponse = GetSettingsResponses[keyof GetSettingsResponses];
+
+export type GetSetupStatusData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/setup/status';
+};
+
+export type GetSetupStatusResponses = {
+    /**
+     * Successful Response
+     */
+    200: SetupStatus;
+};
+
+export type GetSetupStatusResponse = GetSetupStatusResponses[keyof GetSetupStatusResponses];
 
 export type SetKillSwitchData = {
     body: KillSwitch;

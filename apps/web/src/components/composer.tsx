@@ -40,6 +40,7 @@ export function Composer({
 
   return (
     <form
+      data-tour="composer"
       onSubmit={submit}
       className="flex items-end gap-2 rounded-2xl border bg-background p-2 shadow-sm"
     >

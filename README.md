@@ -148,7 +148,7 @@ Tests never reach the network: model calls replay from cassettes and HTTP from `
 
 ## Deploying to AWS
 
-One lean CDK stack in `ca-central-1`, costing about $57/month plus model usage:
+One lean CDK stack in `ca-central-1`, costing about $59/month plus model usage:
 
 - **Edge:** CloudFront in front of an internal ALB.
 - **App:** one ARM64 Fargate task running the API, worker and web UI.

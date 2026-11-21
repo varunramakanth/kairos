@@ -49,7 +49,9 @@ def test_no_nat_gateway_and_one_public_task(template: Template) -> None:
 def test_task_is_arm64_with_both_containers(template: Template) -> None:
     task = only(template, "AWS::ECS::TaskDefinition")
     assert task["RuntimePlatform"]["CpuArchitecture"] == "ARM64"
-    assert (task["Cpu"], task["Memory"]) == ("512", "1536")
+    assert (task["Cpu"], task["Memory"]) == ("512", "2048")
+    # The combinations Fargate accepts at 0.5 vCPU (ECS task size table).
+    assert task["Memory"] in {"1024", "2048", "3072", "4096"}
     assert {c["Name"] for c in task["ContainerDefinitions"]} == {"api", "web"}
 
 

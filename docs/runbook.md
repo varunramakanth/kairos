@@ -1,7 +1,7 @@
 # Runbook: Kairos on AWS
 
 The production stack is described in [ADR-017](adr/017-deployment.md) and costs about
-$57/month. Everything here uses an **admin profile**, never the root user and never the
+$59/month. Everything here uses an **admin profile**, never the root user and never the
 SES-only key in `.env` (the `just` recipes drop those variables).
 
 Throughout, `kairos-admin` is the AWS profile name and `ca-central-1` the region (ADR-006).

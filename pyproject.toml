@@ -65,11 +65,14 @@ ban-relative-imports = "all"
 typeCheckingMode = "strict"
 pythonVersion = "3.12"
 include = ["packages", "services", "tests", "infra/cdk"]
+exclude = ["**/cdk.out", "**/node_modules", "**/.venv", "**/__pycache__"]
 venvPath = "."
 venv = ".venv"
 
 [tool.pytest.ini_options]
 testpaths = ["tests", "packages", "services", "infra/cdk"]
+# cdk synth stages copies of the repository here as Docker build contexts.
+norecursedirs = ["cdk.out", ".*", "node_modules", "__pycache__"]
 addopts = "-ra --strict-markers --import-mode=importlib --allow-hosts=127.0.0.1,::1,localhost --allow-unix-socket"
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"

@@ -24,3 +24,5 @@ class ApiSettings(Settings):
     auth_client_id: str | None = None
     auth_domain: str | None = None
     """Cognito Hosted UI base URL, e.g. https://kairos-xyz.auth.ca-central-1.amazoncognito.com."""
+    auth_user_pool_id: str | None = None
+    """The Cognito user pool, for invites from the Users page (ADR-018)."""

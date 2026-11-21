@@ -109,7 +109,9 @@ random letters. It becomes `https://<prefix>.auth.ca-central-1.amazoncognito.com
 |---|---|
 | Deploy a change | `just deploy kairos-admin -c owner_email=… -c cognito_prefix=…` (about 2 minutes of downtime while the single task is replaced) |
 | Watch logs | `aws logs tail <LogGroup> --follow --profile kairos-admin --region ca-central-1` |
-| Stop agent actions now | The kill switch on the Settings page (actions off) |
+| Invite someone | The **Users** page (admins only): enter their email and a daily cap. Cognito emails them a temporary password; SES emails a verification link. They sign in at `AppUrl` and set up MFA like you did |
+| Remove someone | **Users** page: *Disable* (keeps their data) or *Delete* (removes their sign-in and all their data) |
+| Stop agent actions now | The kill switch on the Settings page (actions off; admins only) |
 | Stop everything | `aws ecs update-service … --desired-count 0`; set it back to `1` to resume. RDS keeps billing |
 | Rotate an API key | Edit `kairos/app`, then `--force-new-deployment` as in section 2 |
 | Online eval results | `/evals`, suite `online` (written every 6 hours) |

@@ -20,6 +20,7 @@ class AuditHooks(BaseHooks):
         if risk is ToolRisk.READ:
             return
         await self._store.record(
+            owner=state.request.user_id,
             actor="agent",
             action="tool.failed" if output.is_error else "tool.executed",
             subject=call.name,

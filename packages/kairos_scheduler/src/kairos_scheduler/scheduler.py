@@ -59,6 +59,7 @@ def plan_firing(job: Job, *, now: datetime, run_id: str, job_run_id: str, model:
         model=job.spec.model or model,
         budget=JOB_BUDGET,
         metadata={"job_id": job.id, "job_kind": job.spec.kind.value},
+        user_id=job.user_id,
     )
     return Firing(
         job_run_id=job_run_id,
@@ -174,7 +175,7 @@ class Scheduler:
         job = claim.job
         scheduled_for = job.next_run_at or now
         since = job.last_run_at or scheduled_for - timedelta(days=7)
-        data = await self._store.digest_data(since=since, until=now)
+        data = await self._store.digest_data(owner=claim.job.user_id, since=since, until=now)
         fired = await self._store.fire_digest(
             claim,
             job_run_id=self._ids.new_id("jrun"),

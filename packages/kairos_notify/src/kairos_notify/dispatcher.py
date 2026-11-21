@@ -15,7 +15,7 @@ from typing import Protocol
 
 import structlog
 
-from kairos_domain.governance import StoredNotification
+from kairos_domain.governance import Recipient, StoredNotification
 from kairos_harness import Clock, SystemClock
 from kairos_notify.channels import Channel, ChannelError
 
@@ -27,6 +27,10 @@ class Outbox(Protocol):
     async def claim(
         self, *, now: datetime, limit: int, ttl_seconds: float
     ) -> Sequence[StoredNotification]: ...
+
+    async def recipient(self, user_id: str) -> Recipient:
+        """Where this user's notifications may go (ADR-018)."""
+        ...
 
     async def finish(
         self,
@@ -69,6 +73,7 @@ class Dispatcher:
     async def _deliver(self, item: StoredNotification) -> None:
         results: dict[str, str] = dict(item.results)
         retry = False
+        recipient = await self._outbox.recipient(item.user_id)
         for name in item.notification.channels:
             if results.get(name) == "sent":
                 continue  # already delivered on an earlier attempt
@@ -76,8 +81,11 @@ class Dispatcher:
             if channel is None:
                 results[name] = "skipped (not configured)"
                 continue
+            if not recipient.active:
+                results[name] = "skipped (user disabled)"
+                continue
             try:
-                await channel.send(item.notification)
+                await channel.send(item.notification, recipient)
                 results[name] = "sent"
             except ChannelError as error:
                 results[name] = f"error: {error}"

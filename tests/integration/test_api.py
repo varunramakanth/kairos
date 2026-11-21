@@ -17,6 +17,7 @@ from kairos_api.settings import ApiSettings
 from kairos_db import JobStore
 from kairos_domain.content import TextBlock
 from kairos_domain.jobs import JobSpec, JobStatus
+from kairos_domain.users import LOCAL_USER
 from kairos_harness.testing import ScriptedProvider, Turn, text_turn
 
 pytestmark = pytest.mark.integration
@@ -198,7 +199,12 @@ async def test_an_agent_proposed_job_waits_for_confirmation(
     now = datetime.now(UTC)
     spec = JobSpec.model_validate(WATCH_BODY)
     await store.create(
-        "job_p", spec, status=JobStatus.PENDING_CONFIRMATION, next_run_at=None, now=now
+        "job_p",
+        spec,
+        status=JobStatus.PENDING_CONFIRMATION,
+        next_run_at=None,
+        now=now,
+        owner=LOCAL_USER,
     )
     async with api(database_url, worker=False) as (client, _):
         confirmed = await client.post("/jobs/job_p/confirm")

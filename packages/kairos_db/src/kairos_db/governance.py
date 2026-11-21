@@ -20,6 +20,7 @@ from kairos_domain.governance import (
     NotificationStatus,
     PushKeys,
     PushSubscription,
+    Recipient,
     StoredNotification,
 )
 
@@ -34,16 +35,22 @@ class AlreadyDecidedError(KairosError):
 
 
 async def insert_notification(
-    connection: AsyncConnection, notification: Notification, *, dedupe_key: str | None = None
+    connection: AsyncConnection,
+    notification: Notification,
+    *,
+    user_id: str,
+    dedupe_key: str | None = None,
 ) -> None:
-    """Queue a notification in the caller's transaction (the outbox pattern)."""
+    """Queue a notification for ``user_id`` in the caller's transaction (the outbox
+    pattern)."""
     await connection.execute(
         text(
-            "INSERT INTO notifications (kind, payload, status, dedupe_key) "
-            "VALUES (:kind, CAST(:payload AS jsonb), 'pending', :key) "
+            "INSERT INTO notifications (kind, payload, status, dedupe_key, user_id) "
+            "VALUES (:kind, CAST(:payload AS jsonb), 'pending', :key, :user) "
             "ON CONFLICT (dedupe_key) DO NOTHING"
         ),
         {
+            "user": user_id,
             "kind": notification.kind.value,
             "payload": notification.model_dump_json(),
             "key": dedupe_key,
@@ -54,18 +61,23 @@ async def insert_notification(
 async def insert_audit(
     connection: AsyncConnection,
     *,
+    user_id: str | None,
     actor: Actor,
     action: str,
     subject: str,
     run_id: str | None = None,
     detail: Mapping[str, JsonValue] | None = None,
 ) -> None:
+    """Append to ``user_id``'s audit log. ``None`` takes the owner of ``run_id``; with
+    neither, the insert fails (``user_id`` is ``NOT NULL``)."""
     await connection.execute(
         text(
-            "INSERT INTO audit_log (actor, action, subject, run_id, detail) "
-            "VALUES (:actor, :action, :subject, :run, CAST(:detail AS jsonb))"
+            "INSERT INTO audit_log (actor, action, subject, run_id, detail, user_id) "
+            "VALUES (:actor, :action, :subject, :run, CAST(:detail AS jsonb), "
+            "COALESCE(CAST(:user AS text), (SELECT user_id FROM runs WHERE id = :run)))"
         ),
         {
+            "user": user_id,
             "actor": actor,
             "action": action,
             "subject": subject,
@@ -108,6 +120,9 @@ async def insert_approval(
     )
     if result.rowcount != 1:
         return
+    owner = (
+        await connection.execute(text("SELECT user_id FROM runs WHERE id = :run"), {"run": run_id})
+    ).scalar_one()
     await insert_notification(
         connection,
         Notification(
@@ -116,10 +131,12 @@ async def insert_approval(
             body=f"{reason}.\n\nInput: {json.dumps(dict(tool_input))[:1000]}",
             url="/inbox",
         ),
+        user_id=owner,
         dedupe_key=f"approval:{run_id}:{tool_call_id}",
     )
     await insert_audit(
         connection,
+        user_id=owner,
         actor="agent",
         action="approval.requested",
         subject=name,
@@ -133,14 +150,11 @@ def _approval(row: RowMapping) -> Approval:
 
 
 _APPROVAL_COLUMNS = (
-    "id, run_id, tool_call_id, name, input, reason, risk, status, note, created_at, decided_at"
+    "a.id, a.run_id, a.tool_call_id, a.name, a.input, a.reason, a.risk, a.status, a.note, "
+    "a.created_at, a.decided_at"
 )
-
-
-_DECIDE = (  # constant column list, no user input
-    "UPDATE approvals SET status = :status, note = :note, decided_at = :now "  # noqa: S608
-    f"WHERE id = :id AND status = 'pending' RETURNING {_APPROVAL_COLUMNS}"
-)
+_FROM_APPROVALS = "FROM approvals a JOIN runs r ON r.id = a.run_id"
+"""Approvals belong to their run's owner."""
 
 
 class ApprovalStore:
@@ -148,53 +162,68 @@ class ApprovalStore:
         self._engine = engine
 
     async def list_approvals(
-        self, *, status: ApprovalStatus | None = None, limit: int = 100
+        self, *, owner: str, status: ApprovalStatus | None = None, limit: int = 100
     ) -> list[Approval]:
-        where = "WHERE status = :status" if status else ""
+        where = "AND a.status = :status" if status else ""
         async with self._engine.connect() as connection:
             rows = await connection.execute(
                 text(
-                    f"SELECT {_APPROVAL_COLUMNS} FROM approvals {where} "  # noqa: S608
-                    "ORDER BY created_at DESC LIMIT :limit"
+                    f"SELECT {_APPROVAL_COLUMNS} {_FROM_APPROVALS} "
+                    f"WHERE r.user_id = :owner {where} "
+                    "ORDER BY a.created_at DESC LIMIT :limit"
                 ),
-                {"status": status.value if status else None, "limit": limit},
+                {"owner": owner, "status": status.value if status else None, "limit": limit},
             )
             return [_approval(r) for r in rows.mappings()]
 
-    async def for_run(self, run_id: str) -> list[Approval]:
+    async def for_run(self, run_id: str, *, owner: str | None) -> list[Approval]:
+        """A run's approvals. ``owner=None`` is the worker, which acts for every user."""
         async with self._engine.connect() as connection:
             rows = await connection.execute(
-                text(f"SELECT {_APPROVAL_COLUMNS} FROM approvals WHERE run_id = :run"),  # noqa: S608
-                {"run": run_id},
+                text(
+                    f"SELECT {_APPROVAL_COLUMNS} {_FROM_APPROVALS} "
+                    "WHERE a.run_id = :run "
+                    "AND (CAST(:owner AS text) IS NULL OR r.user_id = :owner)"
+                ),
+                {"run": run_id, "owner": owner},
             )
             return [_approval(r) for r in rows.mappings()]
 
     async def decide(
-        self, approval_id_: str, *, approve: bool, note: str | None, now: datetime
+        self, approval_id_: str, *, owner: str, approve: bool, note: str | None, now: datetime
     ) -> Approval:
         """Decide one approval. When the run has nothing else pending, it is queued
-        again so a worker resumes it with this decision."""
+        again so a worker resumes it with this decision. Another user's approval
+        raises ``KeyError``, exactly like a missing one."""
         status = ApprovalStatus.APPROVED if approve else ApprovalStatus.DENIED
         async with self._engine.begin() as connection:
+            current = (
+                await connection.execute(
+                    text(
+                        f"SELECT a.status {_FROM_APPROVALS} "
+                        "WHERE a.id = :id AND r.user_id = :owner FOR UPDATE OF a"
+                    ),
+                    {"id": approval_id_, "owner": owner},
+                )
+            ).one_or_none()
+            if current is None:
+                raise KeyError(approval_id_)
+            if current.status != ApprovalStatus.PENDING.value:
+                raise AlreadyDecidedError(f"approval {approval_id_} is already {current.status}")
             row = (
                 (
                     await connection.execute(
-                        text(_DECIDE),
+                        text(
+                            "UPDATE approvals a SET status = :status, note = :note, "  # noqa: S608
+                            "decided_at = :now WHERE a.id = :id AND a.status = 'pending' "
+                            f"RETURNING {_APPROVAL_COLUMNS}"
+                        ),
                         {"status": status.value, "note": note, "now": now, "id": approval_id_},
                     )
                 )
                 .mappings()
-                .one_or_none()
+                .one()
             )
-            if row is None:
-                exists = (
-                    await connection.execute(
-                        text("SELECT status FROM approvals WHERE id = :id"), {"id": approval_id_}
-                    )
-                ).one_or_none()
-                if exists is None:
-                    raise KeyError(approval_id_)
-                raise AlreadyDecidedError(f"approval {approval_id_} is already {exists.status}")
             approval = _approval(row)
             remaining = (
                 await connection.execute(
@@ -214,6 +243,7 @@ class ApprovalStore:
                 )
             await insert_audit(
                 connection,
+                user_id=owner,
                 actor="user",
                 action=f"approval.{status.value}",
                 subject=approval.name,
@@ -230,15 +260,18 @@ class AuditStore:
     async def record(
         self,
         *,
+        owner: str | None,
         actor: Actor,
         action: str,
         subject: str,
         run_id: str | None = None,
         detail: Mapping[str, JsonValue] | None = None,
     ) -> None:
+        """``owner=None`` takes the owner of ``run_id`` (agent actions)."""
         async with self._engine.begin() as connection:
             await insert_audit(
                 connection,
+                user_id=owner,
                 actor=actor,
                 action=action,
                 subject=subject,
@@ -246,21 +279,24 @@ class AuditStore:
                 detail=detail,
             )
 
-    async def recent(self, *, limit: int = 200, before_id: int | None = None) -> list[AuditEntry]:
+    async def recent(
+        self, *, owner: str, limit: int = 200, before_id: int | None = None
+    ) -> list[AuditEntry]:
         async with self._engine.connect() as connection:
             rows = await connection.execute(
                 text(
                     "SELECT id, at, actor, action, subject, run_id, detail FROM audit_log "
-                    "WHERE (CAST(:before AS bigint) IS NULL OR id < :before) "
+                    "WHERE user_id = :owner "
+                    "AND (CAST(:before AS bigint) IS NULL OR id < :before) "
                     "ORDER BY id DESC LIMIT :limit"
                 ),
-                {"before": before_id, "limit": limit},
+                {"owner": owner, "before": before_id, "limit": limit},
             )
             return [AuditEntry.model_validate(dict(r)) for r in rows.mappings()]
 
 
 class SettingsStore:
-    """Small key-value settings. The kill switch lives here."""
+    """Small key-value settings for the whole deployment. The kill switch lives here."""
 
     def __init__(self, engine: AsyncEngine) -> None:
         self._engine = engine
@@ -274,9 +310,9 @@ class SettingsStore:
             ).one_or_none()
         return True if row is None else bool(row.value)
 
-    async def set_actions_enabled(self, enabled: bool, *, now: datetime) -> int:
-        """Flip the kill switch. Turning actions off also pauses every active job.
-        Returns how many jobs were paused."""
+    async def set_actions_enabled(self, enabled: bool, *, by: str, now: datetime) -> int:
+        """Flip the kill switch (an admin, ``by``). Turning actions off also pauses
+        every active job, everyone's. Returns how many jobs were paused."""
         async with self._engine.begin() as connection:
             await connection.execute(
                 text(
@@ -298,6 +334,7 @@ class SettingsStore:
                 paused = result.rowcount
             await insert_audit(
                 connection,
+                user_id=by,
                 actor="user",
                 action="kill_switch.off" if enabled else "kill_switch.on",
                 subject="agent actions",
@@ -312,9 +349,13 @@ class NotificationStore:
     def __init__(self, engine: AsyncEngine) -> None:
         self._engine = engine
 
-    async def enqueue(self, notification: Notification, *, dedupe_key: str | None = None) -> None:
+    async def enqueue(
+        self, notification: Notification, *, owner: str, dedupe_key: str | None = None
+    ) -> None:
         async with self._engine.begin() as connection:
-            await insert_notification(connection, notification, dedupe_key=dedupe_key)
+            await insert_notification(
+                connection, notification, user_id=owner, dedupe_key=dedupe_key
+            )
 
     async def claim(
         self, *, now: datetime, limit: int, ttl_seconds: float
@@ -331,12 +372,26 @@ class NotificationStore:
                             ORDER BY id
                               FOR UPDATE SKIP LOCKED
                             LIMIT :limit)
-                    RETURNING id, payload, status, attempts, results, created_at, sent_at
+                    RETURNING id, user_id, payload, status, attempts, results, created_at, sent_at
                     """
                 ),
                 {"until": now + timedelta(seconds=ttl_seconds), "now": now, "limit": limit},
             )
             return [_stored(r) for r in rows.mappings()]
+
+    async def recipient(self, user_id: str) -> Recipient:
+        """Where ``user_id``'s notifications may go: an email address only when SES
+        has verified it, and never for a disabled user."""
+        async with self._engine.connect() as connection:
+            row = (
+                await connection.execute(
+                    text("SELECT email, email_verified, disabled FROM users WHERE id = :id"),
+                    {"id": user_id},
+                )
+            ).one_or_none()
+        if row is None or row.disabled:
+            return Recipient(user_id=user_id, email=None, active=False)
+        return Recipient(user_id=user_id, email=row.email if row.email_verified else None)
 
     async def finish(
         self,
@@ -352,66 +407,84 @@ class NotificationStore:
         else:
             status = NotificationStatus.SENT if sent else NotificationStatus.FAILED
         async with self._engine.begin() as connection:
-            await connection.execute(
-                text(
-                    "UPDATE notifications SET status = :status, attempts = attempts + 1, "
-                    "results = CAST(:results AS jsonb), lease_until = NULL, "
-                    "next_attempt_at = COALESCE(:retry, next_attempt_at), "
-                    "sent_at = CASE WHEN :status = 'sent' THEN :now ELSE sent_at END "
-                    "WHERE id = :id"
-                ),
-                {
-                    "status": status.value,
-                    "results": json.dumps(dict(results)),
-                    "retry": retry_at,
-                    "now": now,
-                    "id": notification_id,
-                },
-            )
-            if status is NotificationStatus.SENT:
+            owner = (
+                await connection.execute(
+                    text(
+                        "UPDATE notifications SET status = :status, attempts = attempts + 1, "
+                        "results = CAST(:results AS jsonb), lease_until = NULL, "
+                        "next_attempt_at = COALESCE(:retry, next_attempt_at), "
+                        "sent_at = CASE WHEN :status = 'sent' THEN :now ELSE sent_at END "
+                        "WHERE id = :id RETURNING user_id"
+                    ),
+                    {
+                        "status": status.value,
+                        "results": json.dumps(dict(results)),
+                        "retry": retry_at,
+                        "now": now,
+                        "id": notification_id,
+                    },
+                )
+            ).scalar_one_or_none()
+            if status is NotificationStatus.SENT and owner is not None:
                 await insert_audit(
                     connection,
+                    user_id=owner,
                     actor="system",
                     action="notification.sent",
                     subject=str(notification_id),
                     detail={k: v for k, v in results.items()},
                 )
 
-    async def recent(self, *, limit: int = 50) -> list[StoredNotification]:
+    async def recent(self, *, owner: str, limit: int = 50) -> list[StoredNotification]:
         async with self._engine.connect() as connection:
             rows = await connection.execute(
                 text(
-                    "SELECT id, payload, status, attempts, results, created_at, sent_at "
-                    "FROM notifications ORDER BY id DESC LIMIT :limit"
+                    "SELECT id, user_id, payload, status, attempts, results, created_at, sent_at "
+                    "FROM notifications WHERE user_id = :owner ORDER BY id DESC LIMIT :limit"
                 ),
-                {"limit": limit},
+                {"owner": owner, "limit": limit},
             )
             return [_stored(r) for r in rows.mappings()]
 
-    async def subscriptions(self) -> list[PushSubscription]:
+    async def subscriptions(self, owner: str) -> list[PushSubscription]:
+        """The browsers ``owner`` enabled push on."""
         async with self._engine.connect() as connection:
-            rows = await connection.execute(text("SELECT endpoint, keys FROM push_subscriptions"))
+            rows = await connection.execute(
+                text("SELECT endpoint, keys FROM push_subscriptions WHERE user_id = :owner"),
+                {"owner": owner},
+            )
             return [
                 PushSubscription(endpoint=r.endpoint, keys=PushKeys.model_validate(r.keys))
                 for r in rows
             ]
 
-    async def subscribe(self, subscription: PushSubscription) -> None:
+    async def subscribe(self, subscription: PushSubscription, *, owner: str) -> None:
+        """A browser belongs to whoever subscribed it last."""
         async with self._engine.begin() as connection:
             await connection.execute(
                 text(
-                    "INSERT INTO push_subscriptions (endpoint, keys) "
-                    "VALUES (:endpoint, CAST(:keys AS jsonb)) "
-                    "ON CONFLICT (endpoint) DO UPDATE SET keys = EXCLUDED.keys"
+                    "INSERT INTO push_subscriptions (endpoint, keys, user_id) "
+                    "VALUES (:endpoint, CAST(:keys AS jsonb), :owner) "
+                    "ON CONFLICT (endpoint) DO UPDATE SET keys = EXCLUDED.keys, "
+                    "user_id = EXCLUDED.user_id"
                 ),
-                {"endpoint": subscription.endpoint, "keys": subscription.keys.model_dump_json()},
+                {
+                    "endpoint": subscription.endpoint,
+                    "keys": subscription.keys.model_dump_json(),
+                    "owner": owner,
+                },
             )
 
-    async def forget(self, endpoint: str) -> None:
+    async def forget(self, endpoint: str, *, owner: str | None) -> None:
+        """Drop a subscription. ``owner=None`` is the push channel removing an endpoint
+        the browser's push service reported gone."""
         async with self._engine.begin() as connection:
             await connection.execute(
-                text("DELETE FROM push_subscriptions WHERE endpoint = :endpoint"),
-                {"endpoint": endpoint},
+                text(
+                    "DELETE FROM push_subscriptions WHERE endpoint = :endpoint "
+                    "AND (CAST(:owner AS text) IS NULL OR user_id = :owner)"
+                ),
+                {"endpoint": endpoint, "owner": owner},
             )
 
 

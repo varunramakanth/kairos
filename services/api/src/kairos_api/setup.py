@@ -26,7 +26,10 @@ class SetupStatus(DomainModel):
     items: list[SetupItem]
 
 
-def setup_status(settings: ApiSettings, environ: Mapping[str, str]) -> SetupStatus:
+def setup_status(
+    settings: ApiSettings, environ: Mapping[str, str], *, email: str | None = None
+) -> SetupStatus:
+    """``email`` is the signed-in user's own address (ADR-018), never the owner's."""
     demo = settings.provider == "replay"
     return SetupStatus(
         demo=demo,
@@ -52,7 +55,7 @@ def setup_status(settings: ApiSettings, environ: Mapping[str, str]) -> SetupStat
                 id="email",
                 label="Email alerts",
                 ok=settings.email_configured,
-                detail=f"Alerts go to {settings.email_to}."
+                detail=(f"Alerts go to {email}." if email else "Email is set up.")
                 if settings.email_configured
                 else "Set KAIROS_EMAIL_PROVIDER and KAIROS_EMAIL_TO (docs/ses-setup.md).",
             ),

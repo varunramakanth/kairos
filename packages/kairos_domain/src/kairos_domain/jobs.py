@@ -12,6 +12,7 @@ from typing import Annotated, Literal
 from pydantic import AwareDatetime, Field
 
 from kairos_domain.base import DomainModel
+from kairos_domain.users import LOCAL_USER
 
 DEFAULT_TIMEZONE = "America/Toronto"
 
@@ -134,6 +135,7 @@ class JobSpec(DomainModel):
 
 class Job(DomainModel):
     id: str
+    user_id: str = LOCAL_USER
     spec: JobSpec
     status: JobStatus
     next_run_at: datetime | None

@@ -1,6 +1,7 @@
 """Process-level assembly shared by the CLI and the API's embedded worker."""
 
 import asyncio
+import uuid
 from collections.abc import AsyncGenerator
 from contextlib import AsyncExitStack, asynccontextmanager
 from importlib.metadata import version
@@ -8,14 +9,17 @@ from importlib.metadata import version
 import structlog
 from opentelemetry.sdk.trace import SpanProcessor, TracerProvider
 from opentelemetry.sdk.trace.export import SimpleSpanProcessor
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncEngine
 
 from kairos_db import EventPublisher, JobStore, Lease, RunQueue
 from kairos_db.governance import ApprovalStore, AuditStore, NotificationStore, SettingsStore
 from kairos_db.memories import MemoryStore
 from kairos_db.spend import SpendLedger
+from kairos_db.users import UserStore
 from kairos_domain.governance import ApprovalStatus
-from kairos_domain.jobs import JobStatus
+from kairos_domain.jobs import JobKind, JobStatus
+from kairos_domain.users import LOCAL_USER
 from kairos_evals import PostgresSink
 from kairos_harness import Clock, HookChain, Hooks, Provider, RunContext, SystemClock
 from kairos_memory.reflection import ReflectionHooks
@@ -113,7 +117,9 @@ async def open_runtime(
                     settings,
                     http,
                     jobs=JobStore(engine),
-                    notify=lambda n, key: notifications.enqueue(n, dedupe_key=key),
+                    notify=lambda n, key, user: notifications.enqueue(
+                        n, owner=user, dedupe_key=key
+                    ),
                     memory=memories,
                     clock=clock,
                 )
@@ -153,7 +159,6 @@ def channels(settings: Settings, store: NotificationStore) -> list[Channel]:
     if settings.email_provider == "ses" and to:
         configured.append(
             SesChannel(
-                recipient=to,
                 sender=settings.email_from or to,
                 region=settings.ses_region,
                 profile=settings.ses_profile,
@@ -163,7 +168,6 @@ def channels(settings: Settings, store: NotificationStore) -> list[Channel]:
     elif settings.email_provider == "smtp" and to and username and password:
         configured.append(
             SmtpChannel(
-                recipient=to,
                 username=username,
                 password=password,
                 host=settings.smtp_host,
@@ -175,7 +179,7 @@ def channels(settings: Settings, store: NotificationStore) -> list[Channel]:
         configured.append(
             WebPushChannel(
                 subscriptions=store.subscriptions,
-                forget=store.forget,
+                forget=lambda endpoint: store.forget(endpoint, owner=None),
                 vapid_private_key=settings.vapid_private_key,
                 subject=f"mailto:{settings.email_to or 'owner@localhost'}",
             )
@@ -183,22 +187,46 @@ def channels(settings: Settings, store: NotificationStore) -> list[Channel]:
     return configured
 
 
-async def ensure_digest_job(store: JobStore, settings: Settings, clock: Clock) -> None:
-    """Create the weekly digest job once. Later edits (pause, new time) are kept."""
+def digest_job_id(user_id: str) -> str:
+    """The owner keeps the original id; each other user gets their own."""
+    return DIGEST_JOB_ID if user_id == LOCAL_USER else f"job_digest_{uuid.uuid4().hex[:16]}"
+
+
+async def ensure_digest_job(
+    store: JobStore, settings: Settings, clock: Clock, *, owner: str = LOCAL_USER
+) -> None:
+    """Create ``owner``'s weekly digest job once. Later edits (pause, new time) are kept."""
+    if any(job.spec.kind is JobKind.DIGEST for job in await store.list_jobs(owner=owner)):
+        return
     spec = digest_spec(settings.timezone)
     now = clock.now()
     await store.create(
-        DIGEST_JOB_ID,
+        digest_job_id(owner),
         spec,
+        owner=owner,
         status=JobStatus.ACTIVE,
         next_run_at=next_fire(spec.schedule, after=now),
         now=now,
     )
 
 
+async def ensure_digest_jobs(
+    store: JobStore, users: UserStore, settings: Settings, clock: Clock
+) -> None:
+    """One weekly digest per user who has none (ADR-018). Best effort: a user renamed
+    or deleted meanwhile (the owner's first sign-in renames ``local``) is skipped."""
+    for user in await users.list_users():
+        if user.disabled:
+            continue
+        try:
+            await ensure_digest_job(store, settings, clock, owner=user.id)
+        except IntegrityError:
+            log.info("digest_skipped_user_gone", user_id=user.id)
+
+
 async def run_context(approvals: ApprovalStore, lease: Lease) -> RunContext:
     """Human decisions for a run that is being resumed."""
-    decided = await approvals.for_run(lease.run_id)
+    decided = await approvals.for_run(lease.run_id, owner=None)
     return RunContext(
         approved=frozenset(a.tool_call_id for a in decided if a.status is ApprovalStatus.APPROVED),
         denied={a.tool_call_id: a.note or "" for a in decided if a.status is ApprovalStatus.DENIED},
@@ -222,7 +250,10 @@ async def work(
     jobs = JobStore(engine)
     notifications = NotificationStore(engine)
     approvals = ApprovalStore(engine)
-    await ensure_digest_job(jobs, settings, clock)
+    users = UserStore(engine)
+    if settings.email_to:
+        await users.set_local_email(settings.email_to)
+    await ensure_digest_jobs(jobs, users, settings, clock)
     scheduler = Scheduler(
         jobs,
         model=settings.job_model,
@@ -276,7 +307,13 @@ async def work(
 
 def spend_cap(settings: Settings, engine: AsyncEngine, clock: Clock) -> SpendCap:
     ledger = SpendLedger(engine, timezone=settings.timezone)
-    return SpendCap(ledger, cap_usd=settings.daily_spend_cap_usd, clock=clock)
+    users = UserStore(engine)
+
+    async def user_cap(user_id: str) -> float | None:
+        user = await users.get(user_id)
+        return user.daily_cap_usd if user is not None else 0.0
+
+    return SpendCap(ledger, cap_usd=settings.daily_spend_cap_usd, clock=clock, user_cap=user_cap)
 
 
 async def backfill_memories(store: MemoryStore) -> None:

@@ -135,6 +135,7 @@ class Subagents:
             system_prompt=system,
             budget=chosen.budget,
             metadata={"parent_run_id": parent.run_id, "subagent": chosen.name},
+            user_id=parent.user_id,
         )
         finished: RunFinished | None = None
         tool_calls = 0

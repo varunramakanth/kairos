@@ -6,6 +6,7 @@ from pydantic import JsonValue
 
 from kairos_domain.base import DomainModel
 from kairos_domain.content import Provenance
+from kairos_domain.users import LOCAL_USER
 
 
 class ToolRisk(StrEnum):
@@ -56,6 +57,8 @@ class ToolContext(DomainModel):
     tool_call_id: str
     idempotency_key: str
     """Stable across retries of this call. Pass it to external APIs that support one."""
+    user_id: str = LOCAL_USER
+    """The run's owner (ADR-018): tools that read or write user data act for this user."""
 
 
 class Allow(DomainModel):

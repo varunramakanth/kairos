@@ -84,6 +84,7 @@ class ReflectionHooks(BaseHooks):
                 await self._memories.propose(
                     proposal.content,
                     proposal.kind,
+                    owner=request.user_id,
                     source=MemorySource.REFLECTION,
                     run_id=state.run_id,
                 )

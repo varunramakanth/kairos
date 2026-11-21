@@ -49,5 +49,15 @@ async def engine(database_url: str) -> AsyncIterator[AsyncEngine]:
                 "push_subscriptions, app_settings, eval_runs, eval_labels, memories CASCADE"
             )
         )
+        # Users (ADR-018): back to the migrated state, the unbound ``local`` admin.
+        await connection.execute(text("DELETE FROM users WHERE id <> 'local'"))
+        await connection.execute(
+            text(
+                "INSERT INTO users (id, email, role, email_verified) "
+                "VALUES ('local', NULL, 'admin', true) "
+                "ON CONFLICT (id) DO UPDATE SET email = NULL, daily_cap_usd = NULL, "
+                "disabled = false"
+            )
+        )
     yield engine
     await engine.dispose()

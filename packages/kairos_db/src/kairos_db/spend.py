@@ -22,16 +22,19 @@ class SpendLedger:
         self._engine = engine
         self._timezone = timezone
 
-    async def spent_today(self, now: datetime) -> float:
+    async def spent_today(self, now: datetime, *, owner: str | None = None) -> float:
+        """Today's model spend: one user's with ``owner``, everyone's without."""
         start = local_midnight(now, self._timezone)
         async with self._engine.connect() as connection:
             value = (
                 await connection.execute(
                     text(
-                        "SELECT COALESCE(SUM(cost_usd), 0) FROM run_steps "
-                        "WHERE created_at >= :start AND created_at < :end"
+                        "SELECT COALESCE(SUM(s.cost_usd), 0) FROM run_steps s "
+                        "JOIN runs r ON r.id = s.run_id "
+                        "WHERE s.created_at >= :start AND s.created_at < :end "
+                        "AND (CAST(:owner AS text) IS NULL OR r.user_id = :owner)"
                     ),
-                    {"start": start, "end": start + timedelta(days=1, hours=1)},
+                    {"start": start, "end": start + timedelta(days=1, hours=1), "owner": owner},
                 )
             ).scalar_one()
         return float(value)

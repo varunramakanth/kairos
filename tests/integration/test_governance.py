@@ -192,6 +192,7 @@ async def test_settings_and_test_notifications(engine: AsyncEngine, database_url
             "timezone": "America/Toronto",
             "spent_today_usd": 0.0,
             "daily_spend_cap_usd": 5.0,
+            "user_cap_usd": None,
         }
         queued = await client.post("/notifications/test", json={})
         assert queued.json() == {"channels": ["console", "push"]}

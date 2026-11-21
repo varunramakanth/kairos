@@ -17,6 +17,7 @@ class MemoryJobs:
         job_id: str,
         spec: JobSpec,
         *,
+        owner: str,
         status: JobStatus,
         next_run_at: datetime | None,
         now: datetime,
@@ -24,6 +25,7 @@ class MemoryJobs:
         if job_id not in self.jobs:
             self.jobs[job_id] = Job(
                 id=job_id,
+                user_id=owner,
                 spec=spec,
                 status=status,
                 next_run_at=next_run_at,
@@ -32,17 +34,30 @@ class MemoryJobs:
                 created_at=now,
                 updated_at=now,
             )
-        return self.jobs[job_id]
+        job = self.jobs[job_id]
+        if job.user_id != owner:
+            raise ValueError(f"job {job_id} belongs to another user")
+        return job
 
-    async def get(self, job_id: str) -> Job | None:
-        return self.jobs.get(job_id)
+    async def get(self, job_id: str, *, owner: str) -> Job | None:
+        job = self.jobs.get(job_id)
+        return job if job is not None and job.user_id == owner else None
 
-    async def list_jobs(self, *, include_deleted: bool = False) -> Sequence[Job]:
-        return list(self.jobs.values())
+    async def list_jobs(self, *, owner: str, include_deleted: bool = False) -> Sequence[Job]:
+        return [job for job in self.jobs.values() if job.user_id == owner]
 
     async def set_status(
-        self, job_id: str, status: JobStatus, *, next_run_at: datetime | None, now: datetime
+        self,
+        job_id: str,
+        status: JobStatus,
+        *,
+        owner: str,
+        next_run_at: datetime | None,
+        now: datetime,
     ) -> Job | None:
-        job = self.jobs[job_id].model_copy(update={"status": status, "next_run_at": next_run_at})
+        current = await self.get(job_id, owner=owner)
+        if current is None:
+            return None
+        job = current.model_copy(update={"status": status, "next_run_at": next_run_at})
         self.jobs[job_id] = job
         return job

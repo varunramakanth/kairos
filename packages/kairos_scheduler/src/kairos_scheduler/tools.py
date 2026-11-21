@@ -84,6 +84,7 @@ def schedule_tools(
         job = await jobs.create(
             job_id_for(context.idempotency_key),
             args,
+            owner=context.user_id,
             status=JobStatus.PENDING_CONFIRMATION,
             next_run_at=fires[0] if fires else None,
             now=now,
@@ -101,12 +102,12 @@ def schedule_tools(
     @tool(name="schedule_list")
     async def schedule_list(args: ListInput, context: ToolContext) -> ToolOutput:
         """List the user's scheduled tasks and watches with their status and next run."""
-        return ToolOutput(content=summarize(await jobs.list_jobs()))
+        return ToolOutput(content=summarize(await jobs.list_jobs(owner=context.user_id)))
 
     @tool(name="schedule_set_status", risk=ToolRisk.WRITE_SELF)
     async def schedule_set_status(args: SetStatusInput, context: ToolContext) -> ToolOutput:
         """Pause, resume or delete a scheduled job by id (see schedule_list)."""
-        job = await jobs.get(args.job_id)
+        job = await jobs.get(args.job_id, owner=context.user_id)
         if job is None:
             return ToolOutput(content=f"no job {args.job_id}", is_error=True)
         target = JobStatus(args.status)
@@ -121,7 +122,9 @@ def schedule_tools(
         if target is JobStatus.ACTIVE:
             fires = upcoming(job.spec.schedule, after=now, count=1)
             next_run = fires[0] if fires else None
-        updated = await jobs.set_status(job.id, target, next_run_at=next_run, now=now)
+        updated = await jobs.set_status(
+            job.id, target, owner=context.user_id, next_run_at=next_run, now=now
+        )
         status = updated.status.value if updated else target.value
         return ToolOutput(content=f"{job.id} ({job.spec.name}) is now {status}.")
 

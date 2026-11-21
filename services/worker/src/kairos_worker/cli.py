@@ -26,6 +26,7 @@ from cryptography.hazmat.primitives.asymmetric import ec
 from kairos_db import RunQueue, create_engine
 from kairos_db.governance import NotificationStore
 from kairos_db.migrate import upgrade
+from kairos_db.users import UserStore
 from kairos_domain.events import RunEvent
 from kairos_domain.governance import Notification, NotificationKind
 from kairos_domain.run import RunRequest
@@ -179,7 +180,8 @@ def evals_alert(
         engine = create_engine(Settings().database_url)
         try:
             store = NotificationStore(engine)
-            for run in failed:
+            admins = await UserStore(engine).admins()
+            for run, admin in ((run, admin) for run in failed for admin in admins):
                 failures = run.gate.get("failures")
                 lines = [str(f) for f in failures] if isinstance(failures, list) else []
                 await store.enqueue(
@@ -189,7 +191,8 @@ def evals_alert(
                         body="\n".join(lines) or "The regression gate failed.",
                         url=f"/evals/{run.id}",
                     ),
-                    dedupe_key=f"eval-gate:{run.id}",
+                    owner=admin.id,
+                    dedupe_key=f"eval-gate:{run.id}:{admin.id}",
                 )
         finally:
             await engine.dispose()

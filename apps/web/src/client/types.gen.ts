@@ -86,6 +86,10 @@ export type AppSettings = {
      * Daily Spend Cap Usd
      */
     daily_spend_cap_usd: number | null;
+    /**
+     * User Cap Usd
+     */
+    user_cap_usd?: number | null;
 };
 
 /**
@@ -711,6 +715,20 @@ export type IntervalSchedule = {
 };
 
 /**
+ * Invite
+ */
+export type Invite = {
+    /**
+     * Email
+     */
+    email: string;
+    /**
+     * Daily Cap Usd
+     */
+    daily_cap_usd?: number | null;
+};
+
+/**
  * Job
  */
 export type Job = {
@@ -718,6 +736,10 @@ export type Job = {
      * Id
      */
     id: string;
+    /**
+     * User Id
+     */
+    user_id?: string;
     spec: JobSpec;
     status: JobStatus;
     /**
@@ -883,6 +905,27 @@ export type KillSwitch = {
      * Actions Enabled
      */
     actions_enabled: boolean;
+};
+
+/**
+ * Me
+ *
+ * The signed-in user, for the web app (what to show).
+ */
+export type Me = {
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * Email
+     */
+    email: string | null;
+    role: Role;
+    /**
+     * Auth Enabled
+     */
+    auth_enabled: boolean;
 };
 
 /**
@@ -1299,6 +1342,11 @@ export type ReviewLabel = {
 };
 
 /**
+ * Role
+ */
+export type Role = 'admin' | 'member';
+
+/**
  * RunAccepted
  */
 export type RunAccepted = {
@@ -1629,6 +1677,10 @@ export type StoredNotification = {
      * Id
      */
     id: number;
+    /**
+     * User Id
+     */
+    user_id?: string;
     notification: Notification;
     status: NotificationStatus;
     /**
@@ -2100,6 +2152,57 @@ export type Usage = {
      * Cache Creation Input Tokens
      */
     cache_creation_input_tokens?: number;
+};
+
+/**
+ * User
+ */
+export type User = {
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * Email
+     */
+    email: string | null;
+    role: Role;
+    /**
+     * Daily Cap Usd
+     */
+    daily_cap_usd: number | null;
+    /**
+     * Email Verified
+     */
+    email_verified: boolean;
+    /**
+     * Disabled
+     */
+    disabled: boolean;
+    /**
+     * Created At
+     */
+    created_at: string;
+};
+
+/**
+ * UserPatch
+ *
+ * Change a user's cap, or disable or re-enable them.
+ */
+export type UserPatch = {
+    /**
+     * Daily Cap Usd
+     */
+    daily_cap_usd?: number | null;
+    /**
+     * Clear Cap
+     */
+    clear_cap?: boolean;
+    /**
+     * Disabled
+     */
+    disabled?: boolean | null;
 };
 
 /**
@@ -3147,3 +3250,152 @@ export type SendTestNotificationResponses = {
 };
 
 export type SendTestNotificationResponse = SendTestNotificationResponses[keyof SendTestNotificationResponses];
+
+export type GetMeData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/me';
+};
+
+export type GetMeResponses = {
+    /**
+     * Successful Response
+     */
+    200: Me;
+};
+
+export type GetMeResponse = GetMeResponses[keyof GetMeResponses];
+
+export type ListUsersData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/users';
+};
+
+export type ListUsersResponses = {
+    /**
+     * Response List Users
+     *
+     * Successful Response
+     */
+    200: Array<User>;
+};
+
+export type ListUsersResponse = ListUsersResponses[keyof ListUsersResponses];
+
+export type InviteUserData = {
+    body: Invite;
+    path?: never;
+    query?: never;
+    url: '/users';
+};
+
+export type InviteUserErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type InviteUserError = InviteUserErrors[keyof InviteUserErrors];
+
+export type InviteUserResponses = {
+    /**
+     * Successful Response
+     */
+    201: User;
+};
+
+export type InviteUserResponse = InviteUserResponses[keyof InviteUserResponses];
+
+export type DeleteUserData = {
+    body?: never;
+    path: {
+        /**
+         * User Id
+         */
+        user_id: string;
+    };
+    query?: never;
+    url: '/users/{user_id}';
+};
+
+export type DeleteUserErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type DeleteUserError = DeleteUserErrors[keyof DeleteUserErrors];
+
+export type DeleteUserResponses = {
+    /**
+     * Successful Response
+     */
+    204: void;
+};
+
+export type DeleteUserResponse = DeleteUserResponses[keyof DeleteUserResponses];
+
+export type UpdateUserData = {
+    body: UserPatch;
+    path: {
+        /**
+         * User Id
+         */
+        user_id: string;
+    };
+    query?: never;
+    url: '/users/{user_id}';
+};
+
+export type UpdateUserErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type UpdateUserError = UpdateUserErrors[keyof UpdateUserErrors];
+
+export type UpdateUserResponses = {
+    /**
+     * Successful Response
+     */
+    200: User;
+};
+
+export type UpdateUserResponse = UpdateUserResponses[keyof UpdateUserResponses];
+
+export type ResendVerificationData = {
+    body?: never;
+    path: {
+        /**
+         * User Id
+         */
+        user_id: string;
+    };
+    query?: never;
+    url: '/users/{user_id}/verify-email';
+};
+
+export type ResendVerificationErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type ResendVerificationError = ResendVerificationErrors[keyof ResendVerificationErrors];
+
+export type ResendVerificationResponses = {
+    /**
+     * Successful Response
+     */
+    202: User;
+};
+
+export type ResendVerificationResponse = ResendVerificationResponses[keyof ResendVerificationResponses];

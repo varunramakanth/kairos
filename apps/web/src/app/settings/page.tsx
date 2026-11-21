@@ -13,6 +13,7 @@ import { SpendSection } from "@/components/spend-section";
 import { Button } from "@/components/ui/button";
 import { errorMessage } from "@/lib/api";
 import { formatWhen } from "@/lib/jobs";
+import { isAdmin, useMe } from "@/lib/me";
 import {
   currentSubscription,
   disablePush,
@@ -21,6 +22,7 @@ import {
 } from "@/lib/push";
 
 export default function SettingsPage() {
+  const me = useMe();
   const [settings, setSettings] = useState<AppSettings | null>(null);
   const [notifications, setNotifications] = useState<StoredNotification[]>([]);
   const [subscribed, setSubscribed] = useState(false);
@@ -80,41 +82,45 @@ export default function SettingsPage() {
         <p className="rounded-md bg-muted px-3 py-2 text-sm">{message}</p>
       )}
 
-      <section
-        className={`space-y-2 rounded-lg border p-4 ${settings.actions_enabled ? "" : "border-destructive bg-destructive/5"}`}
-      >
-        <div className="flex items-center justify-between gap-3">
-          <div>
-            <h2 className="flex items-center gap-2 font-medium">
-              <OctagonX className="size-4" />
-              Kill switch
-            </h2>
-            <p className="text-muted-foreground text-sm">
+      {isAdmin(me) && (
+        <section
+          className={`space-y-2 rounded-lg border p-4 ${settings.actions_enabled ? "" : "border-destructive bg-destructive/5"}`}
+        >
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <h2 className="flex items-center gap-2 font-medium">
+                <OctagonX className="size-4" />
+                Kill switch
+              </h2>
+              <p className="text-muted-foreground text-sm">
+                {settings.actions_enabled
+                  ? "Agent actions are allowed, each one after your approval."
+                  : "Agent actions are OFF. Every side effect is refused and scheduled jobs are paused."}
+              </p>
+            </div>
+            <Button
+              variant={settings.actions_enabled ? "destructive" : "default"}
+              onClick={toggleActions}
+            >
+              <Power />
               {settings.actions_enabled
-                ? "Agent actions are allowed, each one after your approval."
-                : "Agent actions are OFF. Every side effect is refused and scheduled jobs are paused."}
-            </p>
+                ? "Stop everything"
+                : "Allow actions again"}
+            </Button>
           </div>
-          <Button
-            variant={settings.actions_enabled ? "destructive" : "default"}
-            onClick={toggleActions}
-          >
-            <Power />
-            {settings.actions_enabled
-              ? "Stop everything"
-              : "Allow actions again"}
-          </Button>
-        </div>
-        {!settings.actions_enabled && (
-          <p className="text-muted-foreground text-xs">
-            Paused jobs stay paused: resume the ones you want on the Tasks page.
-          </p>
-        )}
-      </section>
+          {!settings.actions_enabled && (
+            <p className="text-muted-foreground text-xs">
+              Paused jobs stay paused: resume the ones you want on the Tasks
+              page.
+            </p>
+          )}
+        </section>
+      )}
 
       <SpendSection
         spent={settings.spent_today_usd}
-        cap={settings.daily_spend_cap_usd ?? null}
+        cap={settings.user_cap_usd ?? settings.daily_spend_cap_usd ?? null}
+        own={settings.user_cap_usd != null}
       />
 
       <section className="space-y-2 rounded-lg border p-4">

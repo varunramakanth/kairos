@@ -2,7 +2,7 @@
 
 import type { Client, ClientMeta, Options as Options2, RequestResult, ServerSentEventsResult, TDataShape } from './client';
 import { client } from './client.gen';
-import type { AuthConfigData, AuthConfigResponses, ConfirmJobData, ConfirmJobErrors, ConfirmJobResponses, CreateJobData, CreateJobErrors, CreateJobResponses, CreateMemoryData, CreateMemoryErrors, CreateMemoryResponses, CreateThreadData, CreateThreadErrors, CreateThreadResponses, DecideApprovalData, DecideApprovalErrors, DecideApprovalResponses, DeleteMemoryData, DeleteMemoryErrors, DeleteMemoryResponses, GetBlobData, GetBlobErrors, GetBlobResponses, GetEvalRunData, GetEvalRunErrors, GetEvalRunResponses, GetJobData, GetJobErrors, GetJobResponses, GetRunData, GetRunErrors, GetRunMessagesData, GetRunMessagesErrors, GetRunMessagesResponses, GetRunResponses, GetSettingsData, GetSettingsResponses, GetSetupStatusData, GetSetupStatusResponses, GetThreadData, GetThreadErrors, GetThreadResponses, HealthData, HealthResponses, JudgeCalibrationData, JudgeCalibrationResponses, LabelVerdictData, LabelVerdictErrors, LabelVerdictResponses, ListApprovalsData, ListApprovalsErrors, ListApprovalsResponses, ListAuditData, ListAuditErrors, ListAuditResponses, ListEvalRunsData, ListEvalRunsErrors, ListEvalRunsResponses, ListJobsData, ListJobsResponses, ListMemoriesData, ListMemoriesErrors, ListMemoriesResponses, ListNotificationsData, ListNotificationsResponses, ListThreadsData, ListThreadsResponses, PauseAllJobsData, PauseAllJobsResponses, ReviewQueueData, ReviewQueueErrors, ReviewQueueResponses, RunApprovalsData, RunApprovalsErrors, RunApprovalsResponses, RunJobNowData, RunJobNowErrors, RunJobNowResponses, SendMessageData, SendMessageErrors, SendMessageResponses, SendTestNotificationData, SendTestNotificationErrors, SendTestNotificationResponses, SetKillSwitchData, SetKillSwitchErrors, SetKillSwitchResponses, StreamRunEventsData, StreamRunEventsErrors, StreamRunEventsResponses, SubscribePushData, SubscribePushErrors, SubscribePushResponses, UnsubscribePushData, UnsubscribePushErrors, UnsubscribePushResponses, UpdateJobData, UpdateJobErrors, UpdateJobResponses, UpdateMemoryData, UpdateMemoryErrors, UpdateMemoryResponses } from './types.gen';
+import type { AuthConfigData, AuthConfigResponses, ConfirmJobData, ConfirmJobErrors, ConfirmJobResponses, CreateJobData, CreateJobErrors, CreateJobResponses, CreateMemoryData, CreateMemoryErrors, CreateMemoryResponses, CreateThreadData, CreateThreadErrors, CreateThreadResponses, DecideApprovalData, DecideApprovalErrors, DecideApprovalResponses, DeleteMemoryData, DeleteMemoryErrors, DeleteMemoryResponses, DeleteUserData, DeleteUserErrors, DeleteUserResponses, GetBlobData, GetBlobErrors, GetBlobResponses, GetEvalRunData, GetEvalRunErrors, GetEvalRunResponses, GetJobData, GetJobErrors, GetJobResponses, GetMeData, GetMeResponses, GetRunData, GetRunErrors, GetRunMessagesData, GetRunMessagesErrors, GetRunMessagesResponses, GetRunResponses, GetSettingsData, GetSettingsResponses, GetSetupStatusData, GetSetupStatusResponses, GetThreadData, GetThreadErrors, GetThreadResponses, HealthData, HealthResponses, InviteUserData, InviteUserErrors, InviteUserResponses, JudgeCalibrationData, JudgeCalibrationResponses, LabelVerdictData, LabelVerdictErrors, LabelVerdictResponses, ListApprovalsData, ListApprovalsErrors, ListApprovalsResponses, ListAuditData, ListAuditErrors, ListAuditResponses, ListEvalRunsData, ListEvalRunsErrors, ListEvalRunsResponses, ListJobsData, ListJobsResponses, ListMemoriesData, ListMemoriesErrors, ListMemoriesResponses, ListNotificationsData, ListNotificationsResponses, ListThreadsData, ListThreadsResponses, ListUsersData, ListUsersResponses, PauseAllJobsData, PauseAllJobsResponses, ResendVerificationData, ResendVerificationErrors, ResendVerificationResponses, ReviewQueueData, ReviewQueueErrors, ReviewQueueResponses, RunApprovalsData, RunApprovalsErrors, RunApprovalsResponses, RunJobNowData, RunJobNowErrors, RunJobNowResponses, SendMessageData, SendMessageErrors, SendMessageResponses, SendTestNotificationData, SendTestNotificationErrors, SendTestNotificationResponses, SetKillSwitchData, SetKillSwitchErrors, SetKillSwitchResponses, StreamRunEventsData, StreamRunEventsErrors, StreamRunEventsResponses, SubscribePushData, SubscribePushErrors, SubscribePushResponses, UnsubscribePushData, UnsubscribePushErrors, UnsubscribePushResponses, UpdateJobData, UpdateJobErrors, UpdateJobResponses, UpdateMemoryData, UpdateMemoryErrors, UpdateMemoryResponses, UpdateUserData, UpdateUserErrors, UpdateUserResponses } from './types.gen';
 
 export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends boolean = boolean, TResponse = unknown> = Options2<TData, ThrowOnError, TResponse> & {
     /**
@@ -117,7 +117,7 @@ export const createJob = <ThrowOnError extends boolean = false>(options: Options
 /**
  * Pause All Jobs
  *
- * The kill switch: pause every active job.
+ * Pause every one of your active jobs.
  */
 export const pauseAllJobs = <ThrowOnError extends boolean = false>(options?: Options<PauseAllJobsData, ThrowOnError>): RequestResult<PauseAllJobsResponses, unknown, ThrowOnError> => (options?.client ?? client).post<PauseAllJobsResponses, unknown, ThrowOnError>({ url: '/jobs/pause-all', ...options });
 
@@ -275,8 +275,8 @@ export const getSetupStatus = <ThrowOnError extends boolean = false>(options?: O
 /**
  * Set Kill Switch
  *
- * ``actions_enabled=false`` denies every agent action with a side effect and
- * pauses all active jobs.
+ * ``actions_enabled=false`` denies every agent action with a side effect, for
+ * everyone, and pauses all active jobs. Admins only.
  */
 export const setKillSwitch = <ThrowOnError extends boolean = false>(options: Options<SetKillSwitchData, ThrowOnError>): RequestResult<SetKillSwitchResponses, SetKillSwitchErrors, ThrowOnError> => (options.client ?? client).put<SetKillSwitchResponses, SetKillSwitchErrors, ThrowOnError>({
     url: '/settings/kill-switch',
@@ -329,3 +329,60 @@ export const sendTestNotification = <ThrowOnError extends boolean = false>(optio
         ...options.headers
     }
 });
+
+/**
+ * Get Me
+ *
+ * Who is signed in, and their role.
+ */
+export const getMe = <ThrowOnError extends boolean = false>(options?: Options<GetMeData, ThrowOnError>): RequestResult<GetMeResponses, unknown, ThrowOnError> => (options?.client ?? client).get<GetMeResponses, unknown, ThrowOnError>({ url: '/me', ...options });
+
+/**
+ * List Users
+ *
+ * Everyone with access. Email verification is refreshed from SES.
+ */
+export const listUsers = <ThrowOnError extends boolean = false>(options?: Options<ListUsersData, ThrowOnError>): RequestResult<ListUsersResponses, unknown, ThrowOnError> => (options?.client ?? client).get<ListUsersResponses, unknown, ThrowOnError>({ url: '/users', ...options });
+
+/**
+ * Invite User
+ *
+ * Invite someone: Cognito emails them a temporary password, and SES emails a
+ * link that lets Kairos email them.
+ */
+export const inviteUser = <ThrowOnError extends boolean = false>(options: Options<InviteUserData, ThrowOnError>): RequestResult<InviteUserResponses, InviteUserErrors, ThrowOnError> => (options.client ?? client).post<InviteUserResponses, InviteUserErrors, ThrowOnError>({
+    url: '/users',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Delete User
+ *
+ * Remove a member: their sign-in, and all their chats, tasks and memories.
+ */
+export const deleteUser = <ThrowOnError extends boolean = false>(options: Options<DeleteUserData, ThrowOnError>): RequestResult<DeleteUserResponses, DeleteUserErrors, ThrowOnError> => (options.client ?? client).delete<DeleteUserResponses, DeleteUserErrors, ThrowOnError>({ url: '/users/{user_id}', ...options });
+
+/**
+ * Update User
+ *
+ * Change a user's daily cap, or disable or re-enable them.
+ */
+export const updateUser = <ThrowOnError extends boolean = false>(options: Options<UpdateUserData, ThrowOnError>): RequestResult<UpdateUserResponses, UpdateUserErrors, ThrowOnError> => (options.client ?? client).patch<UpdateUserResponses, UpdateUserErrors, ThrowOnError>({
+    url: '/users/{user_id}',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Resend Verification
+ *
+ * Send the SES verification email again.
+ */
+export const resendVerification = <ThrowOnError extends boolean = false>(options: Options<ResendVerificationData, ThrowOnError>): RequestResult<ResendVerificationResponses, ResendVerificationErrors, ThrowOnError> => (options.client ?? client).post<ResendVerificationResponses, ResendVerificationErrors, ThrowOnError>({ url: '/users/{user_id}/verify-email', ...options });

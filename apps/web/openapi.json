@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Kairos API",
-    "version": "0.2.0"
+    "version": "0.3.0"
   },
   "paths": {
     "/auth/config": {
@@ -502,7 +502,7 @@
           "jobs"
         ],
         "summary": "Pause All Jobs",
-        "description": "The kill switch: pause every active job.",
+        "description": "Pause every one of your active jobs.",
         "operationId": "pause_all_jobs",
         "responses": {
           "200": {
@@ -1385,7 +1385,7 @@
           "settings"
         ],
         "summary": "Set Kill Switch",
-        "description": "``actions_enabled=false`` denies every agent action with a side effect and\npauses all active jobs.",
+        "description": "``actions_enabled=false`` denies every agent action with a side effect, for\neveryone, and pauses all active jobs. Admins only.",
         "operationId": "set_kill_switch",
         "requestBody": {
           "content": {
@@ -1569,6 +1569,224 @@
           }
         }
       }
+    },
+    "/me": {
+      "get": {
+        "tags": [
+          "users"
+        ],
+        "summary": "Get Me",
+        "description": "Who is signed in, and their role.",
+        "operationId": "get_me",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Me"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/users": {
+      "get": {
+        "tags": [
+          "users"
+        ],
+        "summary": "List Users",
+        "description": "Everyone with access. Email verification is refreshed from SES.",
+        "operationId": "list_users",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/User"
+                  },
+                  "type": "array",
+                  "title": "Response List Users"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "users"
+        ],
+        "summary": "Invite User",
+        "description": "Invite someone: Cognito emails them a temporary password, and SES emails a\nlink that lets Kairos email them.",
+        "operationId": "invite_user",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Invite"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/User"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/users/{user_id}": {
+      "patch": {
+        "tags": [
+          "users"
+        ],
+        "summary": "Update User",
+        "description": "Change a user's daily cap, or disable or re-enable them.",
+        "operationId": "update_user",
+        "parameters": [
+          {
+            "name": "user_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "User Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UserPatch"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/User"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "users"
+        ],
+        "summary": "Delete User",
+        "description": "Remove a member: their sign-in, and all their chats, tasks and memories.",
+        "operationId": "delete_user",
+        "parameters": [
+          {
+            "name": "user_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "User Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/users/{user_id}/verify-email": {
+      "post": {
+        "tags": [
+          "users"
+        ],
+        "summary": "Resend Verification",
+        "description": "Send the SES verification email again.",
+        "operationId": "resend_verification",
+        "parameters": [
+          {
+            "name": "user_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "User Id"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/User"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -1695,6 +1913,17 @@
               }
             ],
             "title": "Daily Spend Cap Usd"
+          },
+          "user_cap_usd": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "User Cap Usd"
           }
         },
         "additionalProperties": false,
@@ -2691,11 +2920,46 @@
         "title": "IntervalSchedule",
         "description": "Every N seconds of elapsed time (daylight saving does not affect it)."
       },
+      "Invite": {
+        "properties": {
+          "email": {
+            "type": "string",
+            "maxLength": 254,
+            "pattern": "^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$",
+            "title": "Email"
+          },
+          "daily_cap_usd": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 1000.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Daily Cap Usd",
+            "default": 2.0
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "email"
+        ],
+        "title": "Invite"
+      },
       "Job": {
         "properties": {
           "id": {
             "type": "string",
             "title": "Id"
+          },
+          "user_id": {
+            "type": "string",
+            "title": "User Id",
+            "default": "local"
           },
           "spec": {
             "$ref": "#/components/schemas/JobSpec"
@@ -3053,6 +3317,42 @@
           "actions_enabled"
         ],
         "title": "KillSwitch"
+      },
+      "Me": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "email": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email"
+          },
+          "role": {
+            "$ref": "#/components/schemas/Role"
+          },
+          "auth_enabled": {
+            "type": "boolean",
+            "title": "Auth Enabled"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "email",
+          "role",
+          "auth_enabled"
+        ],
+        "title": "Me",
+        "description": "The signed-in user, for the web app (what to show)."
       },
       "Memory": {
         "properties": {
@@ -3717,6 +4017,14 @@
         ],
         "title": "ReviewLabel"
       },
+      "Role": {
+        "type": "string",
+        "enum": [
+          "admin",
+          "member"
+        ],
+        "title": "Role"
+      },
       "RunAccepted": {
         "properties": {
           "thread_id": {
@@ -4259,6 +4567,11 @@
           "id": {
             "type": "integer",
             "title": "Id"
+          },
+          "user_id": {
+            "type": "string",
+            "title": "User Id",
+            "default": "local"
           },
           "notification": {
             "$ref": "#/components/schemas/Notification"
@@ -4923,6 +5236,101 @@
         "type": "object",
         "title": "Usage",
         "description": "Token counts for one model call, or a running total.\n\n``input_tokens`` counts only uncached input, as the Anthropic API reports it."
+      },
+      "User": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "email": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email"
+          },
+          "role": {
+            "$ref": "#/components/schemas/Role"
+          },
+          "daily_cap_usd": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Daily Cap Usd"
+          },
+          "email_verified": {
+            "type": "boolean",
+            "title": "Email Verified"
+          },
+          "disabled": {
+            "type": "boolean",
+            "title": "Disabled"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "email",
+          "role",
+          "daily_cap_usd",
+          "email_verified",
+          "disabled",
+          "created_at"
+        ],
+        "title": "User"
+      },
+      "UserPatch": {
+        "properties": {
+          "daily_cap_usd": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 1000.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Daily Cap Usd"
+          },
+          "clear_cap": {
+            "type": "boolean",
+            "title": "Clear Cap",
+            "default": false
+          },
+          "disabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Disabled"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "UserPatch",
+        "description": "Change a user's cap, or disable or re-enable them."
       },
       "ValidationError": {
         "properties": {

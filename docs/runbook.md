@@ -4,7 +4,7 @@ The production stack is described in [ADR-017](adr/017-deployment.md) and costs 
 $59/month. Everything here uses an **admin profile**, never the root user and never the
 SES-only key in `.env` (the `just` recipes drop those variables).
 
-New to AWS? [aws-explained.md](aws-explained.md) explains every piece in plain language first.
+New to AWS? [aws-explained.md](aws-explained.md) explains every piece in plain language first, and [first-deploy.md](first-deploy.md) walks through the problems the first deploy hit and how they were diagnosed.
 
 Throughout, `kairos-admin` is the AWS profile name and `ca-central-1` the region (ADR-006).
 

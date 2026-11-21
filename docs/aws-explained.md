@@ -11,6 +11,7 @@ It describes **this** project's setup, with real names and sizes, not AWS in gen
 
 Companion documents:
 - [runbook.md](runbook.md): step-by-step commands for deploying, fixing and restoring.
+- [first-deploy.md](first-deploy.md): what went wrong on the first deploy, how each problem was tracked down, and the lessons.
 - [adr/017-deployment.md](adr/017-deployment.md): why it is designed this way, with the exact costs.
 
 ---

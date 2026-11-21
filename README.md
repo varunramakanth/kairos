@@ -171,7 +171,7 @@ just deploy <admin-profile> -c owner_email=you@example.com -c cognito_prefix=kai
 | `apps/web` | Next.js UI (the only TypeScript) |
 | `infra/` | Local compose file, container images (`docker/`) and the AWS CDK app (`cdk/`) |
 | `tests/` | Cross-package and integration tests, eval suites, the scripted demo |
-| `docs/` | [Architecture](docs/architecture.md), [evals](docs/evals.md), [runbook](docs/runbook.md), [AWS explained](docs/aws-explained.md), [threat model](docs/threat-model.md), [demo script](docs/demo-script.md) and ADRs |
+| `docs/` | [Architecture](docs/architecture.md), [evals](docs/evals.md), [runbook](docs/runbook.md), [AWS explained](docs/aws-explained.md), [first deploy](docs/first-deploy.md), [threat model](docs/threat-model.md), [demo script](docs/demo-script.md) and ADRs |
 
 ## Acknowledgements
 

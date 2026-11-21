@@ -220,7 +220,20 @@ class KairosStack(Stack):
                 operating_system_family=ecs.OperatingSystemFamily.LINUX,
             ),
         )
-        task.add_to_task_role_policy(self._ses_send_only(config.owner_email))
+        for statement in self._ses_policies(config.owner_email):
+            task.add_to_task_role_policy(statement)
+        task.add_to_task_role_policy(
+            iam.PolicyStatement(
+                # Invites from the Users page (ADR-018): this pool only.
+                actions=[
+                    "cognito-idp:AdminCreateUser",
+                    "cognito-idp:AdminDisableUser",
+                    "cognito-idp:AdminEnableUser",
+                    "cognito-idp:AdminDeleteUser",
+                ],
+                resources=[pool.user_pool_arn],
+            )
+        )
         api_container = task.add_container(
             "api",
             image=ecs.ContainerImage.from_asset(
@@ -244,6 +257,7 @@ class KairosStack(Stack):
                 "KAIROS_DAILY_SPEND_CAP_USD": str(config.daily_spend_cap_usd),
                 "KAIROS_AUTH_ISSUER": pool.user_pool_provider_url,
                 "KAIROS_AUTH_DOMAIN": domain.base_url(),
+                "KAIROS_AUTH_USER_POOL_ID": pool.user_pool_id,
                 "DB_HOST": db.db_instance_endpoint_address,
                 "DB_NAME": "kairos",
             },
@@ -469,13 +483,23 @@ class KairosStack(Stack):
         )
         return lookup.prefix_list_id
 
-    def _ses_send_only(self, owner: str) -> iam.PolicyStatement:
-        """The task may send email from and to the owner only (as ADR-010's IAM user)."""
-        return iam.PolicyStatement(
-            actions=["ses:SendEmail"],
-            resources=[f"arn:aws:ses:{self.region}:{self.account}:identity/{owner}"],
-            conditions={
-                "StringEquals": {"ses:FromAddress": owner},
-                "ForAllValues:StringEquals": {"ses:Recipients": [owner]},
-            },
-        )
+    def _ses_policies(self, owner: str) -> list[iam.PolicyStatement]:
+        """Email (ADR-010, ADR-018): always sent from the owner's address, to any address
+        SES has verified (the SES sandbox refuses the rest); and managing the email
+        identities that invited users verify."""
+        identities = f"arn:aws:ses:{self.region}:{self.account}:identity/*"
+        return [
+            iam.PolicyStatement(
+                actions=["ses:SendEmail"],
+                resources=[identities],
+                conditions={"StringEquals": {"ses:FromAddress": owner}},
+            ),
+            iam.PolicyStatement(
+                actions=[
+                    "ses:CreateEmailIdentity",
+                    "ses:GetEmailIdentity",
+                    "ses:DeleteEmailIdentity",
+                ],
+                resources=[identities],
+            ),
+        ]

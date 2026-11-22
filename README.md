@@ -148,7 +148,7 @@ Tests never reach the network: model calls replay from cassettes and HTTP from `
 
 ## Deploying to AWS
 
-One lean CDK stack in `ca-central-1`, costing about $57/month plus model usage:
+One lean CDK stack in `ca-central-1`, costing about $59/month plus model usage:
 
 - **Edge:** CloudFront in front of an internal ALB.
 - **App:** one ARM64 Fargate task running the API, worker and web UI.
@@ -156,7 +156,7 @@ One lean CDK stack in `ca-central-1`, costing about $57/month plus model usage:
 - **Sign-in:** Cognito with MFA.
 - **Monitoring:** alarms and a budget, by email.
 
-Follow [docs/runbook.md](docs/runbook.md). The design and cost table are in [ADR-017](docs/adr/017-deployment.md).
+New to AWS? Start with [docs/aws-explained.md](docs/aws-explained.md), a plain-language guide to every piece. Then follow [docs/runbook.md](docs/runbook.md). The design and cost table are in [ADR-017](docs/adr/017-deployment.md).
 
 ```bash
 just deploy <admin-profile> -c owner_email=you@example.com -c cognito_prefix=kairos-abcd
@@ -171,7 +171,7 @@ just deploy <admin-profile> -c owner_email=you@example.com -c cognito_prefix=kai
 | `apps/web` | Next.js UI (the only TypeScript) |
 | `infra/` | Local compose file, container images (`docker/`) and the AWS CDK app (`cdk/`) |
 | `tests/` | Cross-package and integration tests, eval suites, the scripted demo |
-| `docs/` | [Architecture](docs/architecture.md), [evals](docs/evals.md), [runbook](docs/runbook.md), [threat model](docs/threat-model.md), [demo script](docs/demo-script.md) and ADRs |
+| `docs/` | [Architecture](docs/architecture.md), [evals](docs/evals.md), [runbook](docs/runbook.md), [AWS explained](docs/aws-explained.md), [first deploy](docs/first-deploy.md), [threat model](docs/threat-model.md), [demo script](docs/demo-script.md) and ADRs |
 
 ## Acknowledgements
 

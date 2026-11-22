@@ -213,7 +213,8 @@ class KairosStack(Stack):
             self,
             "Task",
             cpu=512,
-            memory_limit_mib=2560 if config.with_browser else 1536,
+            # Fargate allows 1-4 GB in whole GB at 0.5 vCPU: API ~1 GB + web ~0.5 GB fit in 2.
+            memory_limit_mib=3072 if config.with_browser else 2048,
             runtime_platform=ecs.RuntimePlatform(
                 cpu_architecture=ecs.CpuArchitecture.ARM64,
                 operating_system_family=ecs.OperatingSystemFamily.LINUX,

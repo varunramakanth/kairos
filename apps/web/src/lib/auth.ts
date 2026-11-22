@@ -10,17 +10,28 @@ import { UserManager, WebStorageStateStore } from "oidc-client-ts";
 import { client } from "@/client/client.gen";
 import { authConfig } from "@/client/sdk.gen";
 import type { AuthConfig } from "@/client/types.gen";
+// Sets the client's base URL (/api in production). The callback page can be the
+// first code to run after Cognito's redirect, before anything else imports it.
+import "@/lib/api";
 
 export const CALLBACK_PATH = "/auth/callback";
 
 let manager: UserManager | null = null;
 let settings: AuthConfig | null = null;
 
-/** Fetch the auth settings once and set up the token interceptor if auth is on. */
+/**
+ * Fetch the auth settings once and set up the token interceptor if auth is on.
+ *
+ * Fails closed: if the settings cannot be read, this throws (and caches nothing)
+ * rather than assuming auth is off. Only the API saying ``enabled: false`` turns
+ * sign-in off.
+ */
 export async function initAuth(): Promise<AuthConfig> {
   if (settings) return settings;
   const { data } = await authConfig();
-  settings = data ?? { enabled: false };
+  if (!data)
+    throw new Error("Could not load the sign-in settings from Kairos.");
+  settings = data;
   if (settings.enabled && settings.issuer && settings.client_id) {
     manager = new UserManager({
       authority: settings.issuer,

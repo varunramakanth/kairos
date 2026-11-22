@@ -52,7 +52,7 @@ browser ──HTTPS──▶ CloudFront ──VPC origin──▶ internal ALB �
 - **One task, two containers:**
   - **API:** with the embedded worker.
   - **Web UI:** Next.js standalone build.
-- **Size:** 0.5 vCPU / 1.5 GB on Graviton.
+- **Size:** 0.5 vCPU / 2 GB on Graviton. At 0.5 vCPU Fargate only accepts whole gigabytes from 1 to 4 GB; 1 GB is too small for both containers.
 - **Deploys:** they replace the task (`min_healthy_percent=0`), so two workers never overlap, though leases make overlap safe anyway. The circuit breaker rolls back a deploy that fails health checks.
 - **Database settings come from secrets:** the task builds `KAIROS_DATABASE_URL` from the RDS-generated secret at start. Migrations run before uvicorn starts.
 
@@ -97,7 +97,7 @@ Prices are from the AWS price-list files for `ca-central-1`, fetched 2026-11-18.
 | Item | Rate | Per month |
 |---|---|---|
 | Fargate ARM, 0.5 vCPU | $0.03565 per vCPU-hour | $13.01 |
-| Fargate ARM, 1.5 GB | $0.00389 per GB-hour | $4.26 |
+| Fargate ARM, 2 GB | $0.00389 per GB-hour | $5.68 |
 | ALB | $0.02475 per hour | $18.07 |
 | ALB capacity (~0.1 LCU average) | $0.0088 per LCU-hour | ~$0.64 |
 | Public IPv4 (the task) | $0.005 per hour | $3.65 |
@@ -108,11 +108,11 @@ Prices are from the AWS price-list files for `ca-central-1`, fetched 2026-11-18.
 | CloudWatch: 5 alarms, ~0.5 GB of logs | $0.10 each; $0.55/GB | ~$0.78 |
 | ECR and CDK asset storage, ~2 GB | $0.10 per GB-month | ~$0.20 |
 | CloudFront, VPC origin, Cognito (<10k MAU), SNS email, budget | free tiers | $0 |
-| **Total** | | **~$57** |
+| **Total** | | **~$59** |
 
 Model calls are billed by Anthropic, separately. The $5 daily cap bounds them, and typical
 use costs a few dollars a month. Turning on the browser (`-c with_browser=true`) adds
-1 GB of task memory (~$2.84).
+1 GB of task memory, to 3 GB (~$2.84).
 
 ### Rejected layouts
 

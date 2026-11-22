@@ -10,7 +10,7 @@ import aiosmtplib
 import structlog
 from pydantic import SecretStr
 
-from kairos_domain.governance import Notification, PushSubscription
+from kairos_domain.governance import Notification, PushSubscription, Recipient
 
 if TYPE_CHECKING:
     from types_boto3_sesv2 import SESV2Client
@@ -30,7 +30,15 @@ class Channel(Protocol):
     @property
     def name(self) -> str: ...
 
-    async def send(self, notification: Notification) -> None: ...
+    async def send(self, notification: Notification, recipient: Recipient) -> None:
+        """Deliver to ``recipient`` only (ADR-018). Raise ``ChannelError`` on failure."""
+        ...
+
+
+def _address(recipient: Recipient) -> str:
+    if recipient.email is None:
+        raise ChannelError("no verified email address for this user", retryable=False)
+    return recipient.email
 
 
 def _link(notification: Notification, base_url: str) -> str | None:
@@ -42,9 +50,10 @@ class ConsoleChannel:
 
     name = "console"
 
-    async def send(self, notification: Notification) -> None:
+    async def send(self, notification: Notification, recipient: Recipient) -> None:
         log.info(
             "notification",
+            user_id=recipient.user_id,
             kind=notification.kind.value,
             title=notification.title,
             body=notification.body[:500],
@@ -56,17 +65,14 @@ type SmtpSend = Callable[[EmailMessage], Awaitable[None]]
 
 
 class SmtpChannel:
-    """Email to the owner's own address over SMTP with STARTTLS (Gmail by default).
-
-    ``recipient`` is fixed at construction: this channel cannot email anyone else.
-    """
+    """Email over SMTP with STARTTLS (Gmail by default), to the notification's own
+    user and nobody else."""
 
     name = "email"
 
     def __init__(
         self,
         *,
-        recipient: str,
         username: str,
         password: SecretStr,
         host: str = "smtp.gmail.com",
@@ -74,7 +80,6 @@ class SmtpChannel:
         base_url: str = "http://localhost:3000",
         send: SmtpSend | None = None,
     ) -> None:
-        self._recipient = recipient
         self._username = username
         self._password = password
         self._host = host
@@ -82,10 +87,10 @@ class SmtpChannel:
         self._base_url = base_url
         self._send = send or self._smtp_send
 
-    async def send(self, notification: Notification) -> None:
+    async def send(self, notification: Notification, recipient: Recipient) -> None:
         message = EmailMessage()
         message["From"] = f"Kairos <{self._username}>"
-        message["To"] = self._recipient
+        message["To"] = _address(recipient)
         message["Subject"] = f"[Kairos] {notification.title}"
         link = _link(notification, self._base_url)
         message.set_content(notification.body + (f"\n\nOpen in Kairos: {link}" if link else ""))
@@ -125,7 +130,7 @@ _SES_PERMANENT = {
 
 
 class SesChannel:
-    """Email to the owner through Amazon SES (API v2), send-only.
+    """Email through Amazon SES (API v2), send-only, to the notification's own user.
 
     Credentials come from the standard AWS chain (``AWS_PROFILE``, SSO, an instance
     role). Give them only ``ses:SendEmail`` on the sender identity, ideally with
@@ -138,14 +143,12 @@ class SesChannel:
     def __init__(
         self,
         *,
-        recipient: str,
         sender: str,
         region: str,
         profile: str | None = None,
         base_url: str = "http://localhost:3000",
         send: SesSend | None = None,
     ) -> None:
-        self._recipient = recipient
         self._sender = sender
         self._region = region
         self._profile = profile
@@ -153,12 +156,12 @@ class SesChannel:
         self._send = send or self._boto_send
         self._client: SESV2Client | None = None
 
-    def request(self, notification: Notification) -> dict[str, Any]:
+    def request(self, notification: Notification, to: str) -> dict[str, Any]:
         link = _link(notification, self._base_url)
         body = notification.body + (f"\n\nOpen in Kairos: {link}" if link else "")
         return {
             "FromEmailAddress": f"Kairos <{self._sender}>",
-            "Destination": {"ToAddresses": [self._recipient]},
+            "Destination": {"ToAddresses": [to]},
             "Content": {
                 "Simple": {
                     "Subject": {"Data": f"[Kairos] {notification.title}", "Charset": "UTF-8"},
@@ -167,8 +170,8 @@ class SesChannel:
             },
         }
 
-    async def send(self, notification: Notification) -> None:
-        await self._send(self.request(notification))
+    async def send(self, notification: Notification, recipient: Recipient) -> None:
+        await self._send(self.request(notification, _address(recipient)))
 
     async def _boto_send(self, request: dict[str, Any]) -> None:
         # boto3 is synchronous; keep it off the event loop.
@@ -213,7 +216,8 @@ type PushSend = Callable[[PushSubscription, str], Awaitable[None]]
 
 
 class WebPushChannel:
-    """Web Push (RFC 8030) with VAPID, to every subscribed browser. Self-hosted:
+    """Web Push (RFC 8030) with VAPID, to every browser the notification's user
+    subscribed. Self-hosted:
     the browsers' own push services carry the message; no third-party account."""
 
     name = "push"
@@ -221,7 +225,7 @@ class WebPushChannel:
     def __init__(
         self,
         *,
-        subscriptions: Callable[[], Awaitable[Sequence[PushSubscription]]],
+        subscriptions: Callable[[str], Awaitable[Sequence[PushSubscription]]],
         forget: Callable[[str], Awaitable[None]],
         vapid_private_key: SecretStr,
         subject: str,
@@ -233,8 +237,8 @@ class WebPushChannel:
         self._subject = subject
         self._send = send or self._webpush
 
-    async def send(self, notification: Notification) -> None:
-        targets = await self._subscriptions()
+    async def send(self, notification: Notification, recipient: Recipient) -> None:
+        targets = await self._subscriptions(recipient.user_id)
         if not targets:
             raise ChannelError("no browser has enabled push", retryable=False)
         payload = json.dumps(

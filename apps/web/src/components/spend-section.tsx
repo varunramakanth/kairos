@@ -1,12 +1,15 @@
 import { Wallet } from "lucide-react";
 
-/** Today's model spend against the daily cap (Settings page). */
+/** Your model spend today against your daily cap (Settings page). ``own`` means the
+ * admin gave you a cap of your own; otherwise it is the overall cap (ADR-018). */
 export function SpendSection({
   spent,
   cap,
+  own = false,
 }: {
   spent: number;
   cap: number | null;
+  own?: boolean;
 }) {
   const share = cap ? Math.min(1, spent / cap) : 0;
   const reached = cap !== null && spent >= cap;
@@ -40,7 +43,9 @@ export function SpendSection({
         {reached
           ? "The cap is reached: new runs and job firings wait until midnight."
           : "At the cap, runs stop until midnight and you get one notification."}{" "}
-        Change it with KAIROS_DAILY_SPEND_CAP_USD in .env.
+        {own
+          ? "The admin sets your cap on the Users page."
+          : "Change it with KAIROS_DAILY_SPEND_CAP_USD in .env."}
       </p>
     </section>
   );

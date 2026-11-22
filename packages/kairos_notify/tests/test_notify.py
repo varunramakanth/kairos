@@ -16,6 +16,7 @@ from kairos_domain.governance import (
     NotificationStatus,
     PushKeys,
     PushSubscription,
+    Recipient,
     StoredNotification,
 )
 from kairos_domain.tools import ToolContext
@@ -33,6 +34,8 @@ from kairos_notify import (
 from kairos_notify.tools import notify_tool
 
 NOW = datetime(2026, 11, 22, 23, 0, tzinfo=UTC)  # Sunday 18:00 in Toronto
+OWNER_EMAIL = "owner@example.com"
+OWNER = Recipient(user_id="local", email=OWNER_EMAIL)
 ALERT = Notification(
     kind=NotificationKind.ALERT, title="Fare under $1500", body="1420 CAD", url="/tasks/job_1"
 )
@@ -53,6 +56,7 @@ class MemoryOutbox:
             for i, n in enumerate(items, start=1)
         }
         self.retry_at: dict[int, datetime | None] = {}
+        self.recipients: dict[str, Recipient] = {}
 
     async def claim(
         self, *, now: datetime, limit: int, ttl_seconds: float
@@ -84,6 +88,9 @@ class MemoryOutbox:
         )
         self.retry_at[notification_id] = retry_at
 
+    async def recipient(self, user_id: str) -> Recipient:
+        return self.recipients.get(user_id, Recipient(user_id=user_id, email=OWNER_EMAIL))
+
 
 class Flaky:
     name = "email"
@@ -93,7 +100,7 @@ class Flaky:
         self.retryable = retryable
         self.sent: list[Notification] = []
 
-    async def send(self, notification: Notification) -> None:
+    async def send(self, notification: Notification, recipient: Recipient) -> None:
         if self.failures:
             self.failures -= 1
             raise ChannelError("smtp down", retryable=self.retryable)
@@ -116,7 +123,7 @@ async def test_a_failing_channel_is_retried_without_resending_the_others() -> No
     console_calls: list[Notification] = []
 
     class CountingConsole(ConsoleChannel):
-        async def send(self, notification: Notification) -> None:
+        async def send(self, notification: Notification, recipient: Recipient) -> None:
             console_calls.append(notification)
 
     dispatcher = Dispatcher(outbox, [CountingConsole(), email], clock=clock)
@@ -139,20 +146,19 @@ async def test_a_permanent_failure_is_not_retried() -> None:
     assert outbox.retry_at[1] is None
 
 
-async def test_email_goes_only_to_the_owner_with_a_link_back() -> None:
+async def test_email_goes_only_to_the_recipient_with_a_link_back() -> None:
     sent: list[EmailMessage] = []
 
     async def capture(message: EmailMessage) -> None:
         sent.append(message)
 
     channel = SmtpChannel(
-        recipient="owner@example.com",
         username="owner@example.com",
         password=SecretStr("app-password"),
         base_url="http://localhost:3000",
         send=capture,
     )
-    await channel.send(ALERT)
+    await channel.send(ALERT, OWNER)
     (message,) = sent
     assert message["To"] == "owner@example.com"
     assert message["Subject"] == "[Kairos] Fare under $1500"
@@ -169,7 +175,10 @@ async def test_push_reaches_every_browser_and_forgets_expired_ones() -> None:
     forgotten: list[str] = []
     delivered: list[str] = []
 
-    async def subscriptions() -> list[PushSubscription]:
+    asked: list[str] = []
+
+    async def subscriptions(user_id: str) -> list[PushSubscription]:
+        asked.append(user_id)
         return [sub("live"), sub("gone")]
 
     async def forget(endpoint: str) -> None:
@@ -187,7 +196,8 @@ async def test_push_reaches_every_browser_and_forgets_expired_ones() -> None:
         subject="mailto:o@example.com",
         send=send,
     )
-    await channel.send(ALERT)
+    await channel.send(ALERT, OWNER)
+    assert asked == [OWNER.user_id]  # only this user's browsers
     assert forgotten == ["https://push.example/gone"]
     assert '"url": "/tasks/job_1"' in delivered[0]
 
@@ -236,18 +246,19 @@ def test_digest_summarizes_the_week() -> None:
 async def test_notify_me_says_exactly_where_the_message_went(
     channels: list[ChannelName], start: str
 ) -> None:
-    queued: list[tuple[Notification, str]] = []
+    queued: list[tuple[Notification, str, str]] = []
 
-    async def enqueue(notification: Notification, key: str) -> None:
-        queued.append((notification, key))
+    async def enqueue(notification: Notification, key: str, user_id: str) -> None:
+        queued.append((notification, key, user_id))
 
     tool = notify_tool(enqueue, channels)
-    ctx = ToolContext(run_id="r", tool_call_id="t1", idempotency_key="t1")
+    ctx = ToolContext(run_id="r", tool_call_id="t1", idempotency_key="t1", user_id="u_bea")
     output = await tool({"title": "Hi", "body": "Hello"}, ctx)
     assert output.content.startswith(start)
-    ((notification, key),) = queued
+    ((notification, key, user_id),) = queued
     assert notification.channels == channels
     assert key == "notify:t1"
+    assert user_id == "u_bea"  # the run's own user, never one the model picks
 
 
 def ses_channel() -> tuple[SesChannel, Stubber]:
@@ -257,14 +268,12 @@ def ses_channel() -> tuple[SesChannel, Stubber]:
         aws_access_key_id="test",
         aws_secret_access_key="test",  # noqa: S106 (fake key; the stubber never sends)
     )
-    channel = SesChannel(
-        recipient="owner@example.com", sender="owner@example.com", region="ca-central-1"
-    )
+    channel = SesChannel(sender="owner@example.com", region="ca-central-1")
     channel._client = client  # pyright: ignore[reportPrivateUsage]  # inject the stubbed client
     return channel, Stubber(client)
 
 
-async def test_ses_sends_a_plain_text_email_to_the_owner_only() -> None:
+async def test_ses_sends_a_plain_text_email_to_the_recipient_only() -> None:
     channel, stubber = ses_channel()
     stubber.add_response(
         "send_email",
@@ -286,7 +295,7 @@ async def test_ses_sends_a_plain_text_email_to_the_owner_only() -> None:
         },
     )
     with stubber:
-        await channel.send(ALERT)
+        await channel.send(ALERT, OWNER)
     stubber.assert_no_pending_responses()
 
 
@@ -302,6 +311,22 @@ async def test_ses_errors_say_whether_a_retry_can_help(code: str, retryable: boo
     channel, stubber = ses_channel()
     stubber.add_client_error("send_email", service_error_code=code, http_status_code=400)
     with stubber, pytest.raises(ChannelError) as raised:
-        await channel.send(ALERT)
+        await channel.send(ALERT, OWNER)
     assert str(raised.value) == f"SES {code}"
     assert raised.value.retryable is retryable
+
+
+async def test_email_needs_a_verified_address() -> None:
+    channel = SesChannel(sender="owner@example.com", region="ca-central-1")
+    with pytest.raises(ChannelError) as raised:
+        await channel.send(ALERT, Recipient(user_id="u_bea", email=None))
+    assert raised.value.retryable is False
+
+
+async def test_nothing_is_sent_to_a_disabled_user() -> None:
+    outbox = MemoryOutbox(ALERT)
+    outbox.recipients["local"] = Recipient(user_id="local", email=None, active=False)
+    email = Flaky(0)
+    await Dispatcher(outbox, [ConsoleChannel(), email], clock=FakeClock(NOW)).tick()
+    assert email.sent == []
+    assert outbox.rows[1].results["email"] == "skipped (user disabled)"

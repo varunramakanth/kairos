@@ -1491,7 +1491,9 @@ name = "kairos-api"
 version = "0.1.0"
 source = { editable = "services/api" }
 dependencies = [
+    { name = "boto3" },
     { name = "fastapi" },
+    { name = "httpx2" },
     { name = "kairos-db" },
     { name = "kairos-domain" },
     { name = "kairos-evals" },
@@ -1499,12 +1501,15 @@ dependencies = [
     { name = "kairos-scheduler" },
     { name = "kairos-worker" },
     { name = "pyjwt", extra = ["crypto"] },
+    { name = "structlog" },
     { name = "uvicorn", extra = ["standard"] },
 ]
 
 [package.metadata]
 requires-dist = [
+    { name = "boto3", specifier = ">=1.44,<2" },
     { name = "fastapi", specifier = ">=0.163,<1" },
+    { name = "httpx2", specifier = ">=2.16" },
     { name = "kairos-db", editable = "packages/kairos_db" },
     { name = "kairos-domain", editable = "packages/kairos_domain" },
     { name = "kairos-evals", editable = "packages/kairos_evals" },
@@ -1512,6 +1517,7 @@ requires-dist = [
     { name = "kairos-scheduler", editable = "packages/kairos_scheduler" },
     { name = "kairos-worker", editable = "services/worker" },
     { name = "pyjwt", extras = ["crypto"], specifier = ">=2.15,<3" },
+    { name = "structlog", specifier = ">=25" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.54" },
 ]
 

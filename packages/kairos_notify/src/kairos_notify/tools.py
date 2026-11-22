@@ -1,6 +1,7 @@
-"""``notify_me``: the agent sends the owner a message (email and push).
+"""``notify_me``: the agent sends the run's user a message (email and push).
 
-It can only reach the owner: the recipients are fixed by configuration. Under the
+It can only reach the user whose run it is (ADR-018): the recipient is that user's own
+verified address and browsers, never an address the model chooses. Under the
 strict policy every call waits for approval first. The message goes through the
 outbox with the tool call's idempotency key as dedupe key, so a retried call can
 never send twice.
@@ -14,7 +15,8 @@ from kairos_domain.governance import ChannelName, Notification, NotificationKind
 from kairos_domain.tools import ToolContext, ToolOutput, ToolRisk
 from kairos_tools import Tool, tool
 
-type Enqueue = Callable[[Notification, str], Awaitable[None]]
+type Enqueue = Callable[[Notification, str, str], Awaitable[None]]
+"""``(notification, dedupe_key, user_id)``: queue a message for one user."""
 
 
 class NotifyInput(BaseModel):
@@ -50,7 +52,7 @@ def notify_tool(enqueue: Enqueue, channels: Sequence[ChannelName]) -> Tool[Notif
         notification = Notification(
             kind=NotificationKind.MESSAGE, title=args.title, body=args.body, channels=list(channels)
         )
-        await enqueue(notification, f"notify:{context.idempotency_key}")
+        await enqueue(notification, f"notify:{context.idempotency_key}", context.user_id)
         return ToolOutput(content=report)
 
     return notify_me

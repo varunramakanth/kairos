@@ -57,16 +57,16 @@ class ThreadRepository:
     def __init__(self, engine: AsyncEngine) -> None:
         self._engine = engine
 
-    async def create(self, thread_id: str, title: str) -> Thread:
+    async def create(self, thread_id: str, title: str, *, owner: str) -> Thread:
         async with self._engine.begin() as connection:
             row = (
                 (
                     await connection.execute(
                         text(
-                            "INSERT INTO threads (id, title) VALUES (:id, :title) "
+                            "INSERT INTO threads (id, title, user_id) VALUES (:id, :title, :owner) "
                             "RETURNING id, title, created_at, updated_at"
                         ),
-                        {"id": thread_id, "title": title},
+                        {"id": thread_id, "title": title, "owner": owner},
                     )
                 )
                 .mappings()
@@ -74,28 +74,29 @@ class ThreadRepository:
             )
         return Thread.model_validate(dict(row))
 
-    async def recent(self, *, limit: int = 50) -> list[Thread]:
+    async def recent(self, *, owner: str, limit: int = 50) -> list[Thread]:
         async with self._engine.connect() as connection:
             rows = (
                 await connection.execute(
                     text(
                         "SELECT id, title, created_at, updated_at FROM threads "
-                        "ORDER BY updated_at DESC LIMIT :limit"
+                        "WHERE user_id = :owner ORDER BY updated_at DESC LIMIT :limit"
                     ),
-                    {"limit": limit},
+                    {"owner": owner, "limit": limit},
                 )
             ).mappings()
             return [Thread.model_validate(dict(row)) for row in rows]
 
-    async def get(self, thread_id: str) -> ThreadDetail:
+    async def get(self, thread_id: str, *, owner: str) -> ThreadDetail:
         async with self._engine.connect() as connection:
             row = (
                 (
                     await connection.execute(
                         text(
-                            "SELECT id, title, created_at, updated_at FROM threads WHERE id = :id"
+                            "SELECT id, title, created_at, updated_at FROM threads "
+                            "WHERE id = :id AND user_id = :owner"
                         ),
-                        {"id": thread_id},
+                        {"id": thread_id, "owner": owner},
                     )
                 )
                 .mappings()
@@ -123,7 +124,7 @@ class ThreadRepository:
         return ThreadDetail(thread=Thread.model_validate(dict(row)), runs=details)
 
     async def start_turn(
-        self, thread_id: str, build: Callable[[tuple[Message, ...]], RunRequest]
+        self, thread_id: str, build: Callable[[tuple[Message, ...]], RunRequest], *, owner: str
     ) -> RunRequest:
         """Queue the next run of a thread, built on the thread's history.
 
@@ -133,7 +134,10 @@ class ThreadRepository:
         async with self._engine.begin() as connection:
             locked = (
                 await connection.execute(
-                    text("SELECT title FROM threads WHERE id = :id FOR UPDATE"), {"id": thread_id}
+                    text(
+                        "SELECT title FROM threads WHERE id = :id AND user_id = :owner FOR UPDATE"
+                    ),
+                    {"id": thread_id, "owner": owner},
                 )
             ).one_or_none()
             if locked is None:
@@ -153,6 +157,8 @@ class ThreadRepository:
             if latest is not None and latest.state is not None:
                 history = continuable_history(RunState.model_validate(latest.state).messages)
             request = build(history)
+            if request.user_id != owner:
+                raise ValueError("a thread's runs must belong to the thread's owner")
             await insert_run(connection, request)
             await connection.execute(
                 text("UPDATE threads SET updated_at = now() WHERE id = :id"), {"id": thread_id}
@@ -166,13 +172,16 @@ class RunReader:
     def __init__(self, engine: AsyncEngine) -> None:
         self._engine = engine
 
-    async def get(self, run_id: str) -> RunDetail:
+    async def get(self, run_id: str, *, owner: str) -> RunDetail:
         async with self._engine.connect() as connection:
             row = (
                 (
                     await connection.execute(
-                        text(f"SELECT {_RUN_COLUMNS} FROM runs WHERE id = :id"),  # noqa: S608
-                        {"id": run_id},
+                        text(
+                            f"SELECT {_RUN_COLUMNS} FROM runs "  # noqa: S608
+                            "WHERE id = :id AND user_id = :owner"
+                        ),
+                        {"id": run_id, "owner": owner},
                     )
                 )
                 .mappings()
@@ -182,10 +191,13 @@ class RunReader:
                 raise NotFoundError(f"run {run_id} not found")
             return RunDetail(run=_summary(row), events=await _events(connection, run_id))
 
-    async def exists(self, run_id: str) -> bool:
+    async def exists(self, run_id: str, *, owner: str) -> bool:
         async with self._engine.connect() as connection:
             row = (
-                await connection.execute(text("SELECT 1 FROM runs WHERE id = :id"), {"id": run_id})
+                await connection.execute(
+                    text("SELECT 1 FROM runs WHERE id = :id AND user_id = :owner"),
+                    {"id": run_id, "owner": owner},
+                )
             ).one_or_none()
         return row is not None
 
@@ -203,24 +215,31 @@ class RunReader:
         async with self._engine.connect() as connection:
             return await _events(connection, run_id, after_seq=after_seq)
 
-    async def messages(self, run_id: str) -> list[Message]:
+    async def messages(self, run_id: str, *, owner: str) -> list[Message]:
         """The model-facing history of a run's current epoch."""
         async with self._engine.connect() as connection:
             row = (
                 await connection.execute(
-                    text("SELECT state->'messages' AS messages FROM runs WHERE id = :id"),
-                    {"id": run_id},
+                    text(
+                        "SELECT state->'messages' AS messages FROM runs "
+                        "WHERE id = :id AND user_id = :owner"
+                    ),
+                    {"id": run_id, "owner": owner},
                 )
             ).one_or_none()
         if row is None:
             raise NotFoundError(f"run {run_id} not found")
         return _MESSAGES.validate_python(row.messages or [])
 
-    async def blob(self, blob_id: str) -> str:
+    async def blob(self, blob_id: str, *, owner: str) -> str:
         async with self._engine.connect() as connection:
             row = (
                 await connection.execute(
-                    text("SELECT content FROM tool_result_blobs WHERE id = :id"), {"id": blob_id}
+                    text(
+                        "SELECT b.content FROM tool_result_blobs b JOIN runs r ON r.id = b.run_id "
+                        "WHERE b.id = :id AND r.user_id = :owner"
+                    ),
+                    {"id": blob_id, "owner": owner},
                 )
             ).one_or_none()
         if row is None:

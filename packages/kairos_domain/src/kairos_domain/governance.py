@@ -8,6 +8,7 @@ from pydantic import Field, JsonValue
 
 from kairos_domain.base import DomainModel
 from kairos_domain.tools import ToolRisk
+from kairos_domain.users import LOCAL_USER
 
 
 class ApprovalStatus(StrEnum):
@@ -78,6 +79,7 @@ class NotificationStatus(StrEnum):
 
 class StoredNotification(DomainModel):
     id: int
+    user_id: str = LOCAL_USER
     notification: Notification
     status: NotificationStatus
     attempts: int
@@ -85,6 +87,16 @@ class StoredNotification(DomainModel):
     """Per channel: ``sent``, ``skipped (...)`` or the last error."""
     created_at: datetime
     sent_at: datetime | None
+
+
+class Recipient(DomainModel):
+    """Who a notification is for, and where it may be sent (ADR-018)."""
+
+    user_id: str
+    email: str | None
+    """Set only when SES has verified the address."""
+    active: bool = True
+    """False for a disabled or deleted user: nothing is sent."""
 
 
 class PushKeys(DomainModel):

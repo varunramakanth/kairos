@@ -8,6 +8,7 @@ from kairos_domain.base import DomainModel
 from kairos_domain.content import Message
 from kairos_domain.model import Effort
 from kairos_domain.usage import Budget, BudgetSpent, Usage
+from kairos_domain.users import LOCAL_USER
 
 
 class RunStatus(StrEnum):
@@ -52,6 +53,8 @@ class RunRequest(DomainModel):
     provider's prompt cache hit across turns, and the API requires it for thinking.
     """
     metadata: dict[str, str] = Field(default_factory=dict[str, str])
+    user_id: str = LOCAL_USER
+    """Whose run this is (ADR-018). Tools that touch user data act for this user only."""
 
 
 class ToolCallStatus(StrEnum):

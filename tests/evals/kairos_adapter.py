@@ -368,7 +368,7 @@ async def _finish(loop: AgentLoop, request: RunRequest) -> RunFinished:
     return next(e for e in events if isinstance(e, RunFinished))
 
 
-async def _discard(notification: Notification, dedupe_key: str) -> None:
+async def _discard(notification: Notification, dedupe_key: str, user_id: str) -> None:
     """``notify_me`` always waits for approval in evals, so nothing is ever sent."""
 
 

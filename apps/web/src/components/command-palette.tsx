@@ -14,7 +14,8 @@ import { listThreads } from "@/client/sdk.gen";
 import type { Thread } from "@/client/types.gen";
 import { OPEN_PALETTE } from "@/components/shell";
 import { START_TOUR } from "@/components/tour";
-import { NAV_ITEMS } from "@/lib/nav";
+import { useMe } from "@/lib/me";
+import { navFor } from "@/lib/nav";
 import { type Command, filterCommands } from "@/lib/palette";
 import { setTheme } from "@/lib/theme";
 import { cn } from "@/lib/utils";
@@ -50,6 +51,7 @@ const ACTIONS: Command[] = [
 /** ⌘K / Ctrl+K: jump to a page or thread, or run an action. */
 export function CommandPalette() {
   const router = useRouter();
+  const me = useMe();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [selected, setSelected] = useState(0);
@@ -86,7 +88,7 @@ export function CommandPalette() {
   const commands = useMemo<Command[]>(
     () => [
       ...ACTIONS,
-      ...NAV_ITEMS.map((item) => ({
+      ...navFor(me.role).map((item) => ({
         id: `page:${item.href}`,
         label: item.label,
         group: "Pages" as const,
@@ -98,7 +100,7 @@ export function CommandPalette() {
         group: "Threads" as const,
       })),
     ],
-    [threads],
+    [threads, me.role],
   );
   const results = useMemo(
     () => filterCommands(commands, query),

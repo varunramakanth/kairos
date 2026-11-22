@@ -10,6 +10,7 @@ from testcontainers.community.postgres import PostgresContainer
 
 from kairos_db.memories import MemoryStore
 from kairos_domain.memory import MemoryKind, MemorySource, MemoryStatus
+from kairos_domain.users import LOCAL_USER
 from kairos_worker.backup import BackupError, backup, due, dumps, prune, restore
 
 pytestmark = pytest.mark.integration
@@ -31,6 +32,7 @@ async def test_a_dump_restores_deleted_data(
         MemoryKind.PROFILE,
         source=MemorySource.USER,
         status=MemoryStatus.ACTIVE,
+        owner=LOCAL_USER,
     )
     user, db = postgres.username, postgres.dbname
     dump = await backup(
@@ -40,14 +42,14 @@ async def test_a_dump_restores_deleted_data(
     assert dump.stat().st_size > 1000
     assert not list(tmp_path.glob("*.partial"))  # noqa: ASYNC240  # a test assertion
 
-    await store.delete(kept.id)
-    assert await store.get(kept.id) is None
+    await store.delete(kept.id, owner=LOCAL_USER)
+    assert await store.get(kept.id, owner=LOCAL_USER) is None
     await engine.dispose()  # let pg_restore drop and recreate tables
     await restore(
         dump,
         command=docker_exec(postgres, "pg_restore", "-U", user, "-d", db, "--clean", "--if-exists"),
     )
-    restored = await store.get(kept.id)
+    restored = await store.get(kept.id, owner=LOCAL_USER)
     assert restored is not None
     assert restored.content == "Lives in Toronto"
 

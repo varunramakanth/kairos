@@ -44,7 +44,7 @@ class Embedder(Protocol):
 _KEYWORD = (
     f"SELECT {_COLUMNS} FROM memories, "  # noqa: S608  # constant SQL
     "websearch_to_tsquery('english', :q) AS query "
-    "WHERE status = 'active' AND search @@ query "
+    "WHERE status = 'active' AND user_id = :owner AND search @@ query "
     f"ORDER BY ts_rank_cd(search, query) * {_RECENCY} DESC, updated_at DESC LIMIT :limit"
 )
 
@@ -53,13 +53,13 @@ WITH query AS (SELECT websearch_to_tsquery('english', :q) AS tsq),
 keyword AS (
     SELECT id, row_number() OVER (ORDER BY ts_rank_cd(search, query.tsq) DESC) AS rank
     FROM memories, query
-    WHERE status = 'active' AND search @@ query.tsq
+    WHERE status = 'active' AND user_id = :owner AND search @@ query.tsq
     ORDER BY rank LIMIT {CANDIDATES}
 ),
 semantic AS (
     SELECT id, row_number() OVER (ORDER BY embedding <=> CAST(:v AS vector)) AS rank
     FROM memories
-    WHERE status = 'active' AND embedding IS NOT NULL
+    WHERE status = 'active' AND user_id = :owner AND embedding IS NOT NULL
       AND embedding <=> CAST(:v AS vector) <= :max_distance
     ORDER BY rank LIMIT {CANDIDATES}
 ),
@@ -135,18 +135,24 @@ class MemoryStore:
         return done
 
     async def propose(
-        self, content: str, kind: MemoryKind, *, source: MemorySource, run_id: str | None
+        self,
+        content: str,
+        kind: MemoryKind,
+        *,
+        owner: str,
+        source: MemorySource,
+        run_id: str | None,
     ) -> Memory | None:
         vector = await self._vector(content.strip())
         async with self._engine.begin() as connection:
             duplicate = (
                 await connection.execute(
                     text(
-                        "SELECT 1 FROM memories WHERE "
+                        "SELECT 1 FROM memories WHERE user_id = :owner AND "
                         "lower(regexp_replace(content, '\\s+', ' ', 'g')) = "
                         "lower(regexp_replace(:content, '\\s+', ' ', 'g'))"
                     ),
-                    {"content": content.strip()},
+                    {"content": content.strip(), "owner": owner},
                 )
             ).first()
             if duplicate is not None:
@@ -155,8 +161,9 @@ class MemoryStore:
                 (
                     await connection.execute(
                         text(
-                            "INSERT INTO memories (id, kind, content, status, source, run_id) "  # noqa: S608
-                            "VALUES (:id, :kind, :content, 'proposed', :source, :run_id) "
+                            "INSERT INTO memories (id, kind, content, status, source, run_id, "  # noqa: S608
+                            "user_id) VALUES (:id, :kind, :content, 'proposed', :source, "
+                            ":run_id, :owner) "
                             f"RETURNING {_COLUMNS}"
                         ),
                         {
@@ -165,6 +172,7 @@ class MemoryStore:
                             "content": content.strip(),
                             "source": source.value,
                             "run_id": run_id,
+                            "owner": owner,
                         },
                     )
                 )
@@ -176,7 +184,13 @@ class MemoryStore:
             return memory
 
     async def create(
-        self, content: str, kind: MemoryKind, *, source: MemorySource, status: MemoryStatus
+        self,
+        content: str,
+        kind: MemoryKind,
+        *,
+        owner: str,
+        source: MemorySource,
+        status: MemoryStatus,
     ) -> Memory:
         vector = await self._vector(content.strip())
         async with self._engine.begin() as connection:
@@ -184,8 +198,8 @@ class MemoryStore:
                 (
                     await connection.execute(
                         text(
-                            "INSERT INTO memories (id, kind, content, status, source) "  # noqa: S608
-                            "VALUES (:id, :kind, :content, :status, :source) "
+                            "INSERT INTO memories (id, kind, content, status, source, user_id) "  # noqa: S608
+                            "VALUES (:id, :kind, :content, :status, :source, :owner) "
                             f"RETURNING {_COLUMNS}"
                         ),
                         {
@@ -194,6 +208,7 @@ class MemoryStore:
                             "content": content.strip(),
                             "status": status.value,
                             "source": source.value,
+                            "owner": owner,
                         },
                     )
                 )
@@ -204,7 +219,7 @@ class MemoryStore:
             await self._set_vector(connection, memory.id, vector)
             return memory
 
-    async def search(self, query: str, *, limit: int = 5) -> Sequence[Memory]:
+    async def search(self, query: str, *, owner: str, limit: int = 5) -> Sequence[Memory]:
         vector = None
         if self._embedder is not None:
             try:
@@ -218,6 +233,7 @@ class MemoryStore:
                         text(_HYBRID if vector else _KEYWORD),
                         {
                             "q": query,
+                            "owner": owner,
                             "v": vector,
                             "max_distance": 1.0 - self._min_similarity,
                             "limit": limit,
@@ -233,10 +249,10 @@ class MemoryStore:
                         await connection.execute(
                             text(
                                 f"SELECT {_COLUMNS} FROM memories "  # noqa: S608  # constant SQL
-                                "WHERE status = 'active' AND content ILIKE :like "
-                                "ORDER BY updated_at DESC LIMIT :limit"
+                                "WHERE status = 'active' AND user_id = :owner "
+                                "AND content ILIKE :like ORDER BY updated_at DESC LIMIT :limit"
                             ),
-                            {"like": f"%{query.strip()}%", "limit": limit},
+                            {"like": f"%{query.strip()}%", "owner": owner, "limit": limit},
                         )
                     )
                     .mappings()
@@ -245,26 +261,30 @@ class MemoryStore:
             return [_memory(r) for r in rows]
 
     async def recent(
-        self, *, status: MemoryStatus | None = None, limit: int = 200
+        self, *, owner: str, status: MemoryStatus | None = None, limit: int = 200
     ) -> Sequence[Memory]:
         async with self._engine.connect() as connection:
             rows = await connection.execute(
                 text(
                     f"SELECT {_COLUMNS} FROM memories "  # noqa: S608  # constant SQL
-                    "WHERE (CAST(:status AS text) IS NULL OR status = :status) "
+                    "WHERE user_id = :owner "
+                    "AND (CAST(:status AS text) IS NULL OR status = :status) "
                     "ORDER BY updated_at DESC LIMIT :limit"
                 ),
-                {"status": status.value if status else None, "limit": limit},
+                {"owner": owner, "status": status.value if status else None, "limit": limit},
             )
             return [_memory(r) for r in rows.mappings()]
 
-    async def get(self, memory_id: str) -> Memory | None:
+    async def get(self, memory_id: str, *, owner: str) -> Memory | None:
         async with self._engine.connect() as connection:
             row = (
                 (
                     await connection.execute(
-                        text(f"SELECT {_COLUMNS} FROM memories WHERE id = :id"),  # noqa: S608
-                        {"id": memory_id},
+                        text(
+                            f"SELECT {_COLUMNS} FROM memories "  # noqa: S608
+                            "WHERE id = :id AND user_id = :owner"
+                        ),
+                        {"id": memory_id, "owner": owner},
                     )
                 )
                 .mappings()
@@ -272,7 +292,7 @@ class MemoryStore:
             )
             return _memory(row) if row else None
 
-    async def update(self, memory_id: str, change: MemoryUpdate) -> Memory | None:
+    async def update(self, memory_id: str, change: MemoryUpdate, *, owner: str) -> Memory | None:
         vector = await self._vector(change.content.strip()) if change.content else None
         async with self._engine.begin() as connection:
             row = (
@@ -284,10 +304,11 @@ class MemoryStore:
                             "content = COALESCE(CAST(:content AS text), content), "
                             "status = COALESCE(CAST(:status AS text), status), "
                             "updated_at = now() "
-                            f"WHERE id = :id RETURNING {_COLUMNS}"
+                            f"WHERE id = :id AND user_id = :owner RETURNING {_COLUMNS}"
                         ),
                         {
                             "id": memory_id,
+                            "owner": owner,
                             "kind": change.kind.value if change.kind else None,
                             "content": change.content.strip() if change.content else None,
                             "status": change.status.value if change.status else None,
@@ -303,10 +324,11 @@ class MemoryStore:
                 await self._set_vector(connection, memory_id, vector)
             return _memory(row)
 
-    async def delete(self, memory_id: str) -> bool:
+    async def delete(self, memory_id: str, *, owner: str) -> bool:
         async with self._engine.begin() as connection:
             result = await connection.execute(
-                text("DELETE FROM memories WHERE id = :id"), {"id": memory_id}
+                text("DELETE FROM memories WHERE id = :id AND user_id = :owner"),
+                {"id": memory_id, "owner": owner},
             )
             return result.rowcount > 0  # type: ignore[attr-defined]  # CursorResult has rowcount
 

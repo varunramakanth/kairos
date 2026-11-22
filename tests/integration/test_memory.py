@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine
 
 from kairos_db.memories import MemoryStore
 from kairos_domain.memory import MemoryKind, MemorySource, MemoryStatus, MemoryUpdate
+from kairos_domain.users import LOCAL_USER
 from tests.integration.test_governance import api, rows
 
 pytestmark = pytest.mark.integration
@@ -20,12 +21,14 @@ async def test_recall_finds_confirmed_memories_by_keyword_and_recency(engine: As
         MemoryKind.PREFERENCE,
         source=MemorySource.USER,
         status=MemoryStatus.ACTIVE,
+        owner=LOCAL_USER,
     )
     old = await store.create(
         "Prefers window seats on short flights",
         MemoryKind.PREFERENCE,
         source=MemorySource.USER,
         status=MemoryStatus.ACTIVE,
+        owner=LOCAL_USER,
     )
     async with engine.begin() as connection:  # age one memory by a year
         await connection.execute(
@@ -33,31 +36,47 @@ async def test_recall_finds_confirmed_memories_by_keyword_and_recency(engine: As
             {"id": old.id},
         )
     proposal = await store.propose(
-        "Is flying to Lisbon in March", MemoryKind.TASK, source=MemorySource.AGENT, run_id=None
+        "Is flying to Lisbon in March",
+        MemoryKind.TASK,
+        source=MemorySource.AGENT,
+        run_id=None,
+        owner=LOCAL_USER,
     )
     assert proposal is not None
 
-    found = await store.search("seats flights")
+    found = await store.search("seats flights", owner=LOCAL_USER)
     assert [m.id for m in found] == [aisle.id, old.id]  # equal relevance; newer first
-    assert await store.search("Lisbon") == []  # proposals are never recalled
-    assert [m.id for m in await store.search("aisl")] == [aisle.id]  # substring fallback
+    assert await store.search("Lisbon", owner=LOCAL_USER) == []  # proposals are never recalled
+    assert [m.id for m in await store.search("aisl", owner=LOCAL_USER)] == [
+        aisle.id
+    ]  # substring fallback
 
     # English stemming: "flight" matches "flights".
-    assert aisle.id in [m.id for m in await store.search("flight")]
+    assert aisle.id in [m.id for m in await store.search("flight", owner=LOCAL_USER)]
 
-    confirmed = await store.update(proposal.id, MemoryUpdate(status=MemoryStatus.ACTIVE))
+    confirmed = await store.update(
+        proposal.id, MemoryUpdate(status=MemoryStatus.ACTIVE), owner=LOCAL_USER
+    )
     assert confirmed is not None
-    assert [m.id for m in await store.search("Lisbon March")] == [proposal.id]
+    assert [m.id for m in await store.search("Lisbon March", owner=LOCAL_USER)] == [proposal.id]
 
 
 async def test_proposals_are_deduplicated_ignoring_case_and_spacing(engine: AsyncEngine) -> None:
     store = MemoryStore(engine)
     first = await store.propose(
-        "Lives in Toronto", MemoryKind.PROFILE, source=MemorySource.REFLECTION, run_id=None
+        "Lives in Toronto",
+        MemoryKind.PROFILE,
+        source=MemorySource.REFLECTION,
+        run_id=None,
+        owner=LOCAL_USER,
     )
     assert first is not None
     again = await store.propose(
-        "  lives in   TORONTO ", MemoryKind.PROFILE, source=MemorySource.AGENT, run_id=None
+        "  lives in   TORONTO ",
+        MemoryKind.PROFILE,
+        source=MemorySource.AGENT,
+        run_id=None,
+        owner=LOCAL_USER,
     )
     assert again is None
 
@@ -67,7 +86,11 @@ async def test_the_memory_api_creates_confirms_edits_and_deletes(
 ) -> None:
     store = MemoryStore(engine)
     proposal = await store.propose(
-        "Is vegetarian", MemoryKind.PREFERENCE, source=MemorySource.REFLECTION, run_id=None
+        "Is vegetarian",
+        MemoryKind.PREFERENCE,
+        source=MemorySource.REFLECTION,
+        run_id=None,
+        owner=LOCAL_USER,
     )
     assert proposal is not None
     async with api(database_url, []) as (client, _):
@@ -143,14 +166,21 @@ async def test_semantic_recall_finds_meaning_without_shared_words(engine: AsyncE
         MemoryKind.PREFERENCE,
         source=MemorySource.USER,
         status=MemoryStatus.ACTIVE,
+        owner=LOCAL_USER,
     )
     await store.create(
-        "Is vegetarian", MemoryKind.PREFERENCE, source=MemorySource.USER, status=MemoryStatus.ACTIVE
+        "Is vegetarian",
+        MemoryKind.PREFERENCE,
+        source=MemorySource.USER,
+        status=MemoryStatus.ACTIVE,
+        owner=LOCAL_USER,
     )
     # No word in common with the memory; only the vectors match.
-    assert [m.id for m in await store.search("where do I like to sit on a plane")] == [aisle.id]
+    assert [
+        m.id for m in await store.search("where do I like to sit on a plane", owner=LOCAL_USER)
+    ] == [aisle.id]
     # Below the similarity threshold, nothing comes back.
-    assert await store.search("quarterly tax deadlines") == []
+    assert await store.search("quarterly tax deadlines", owner=LOCAL_USER) == []
 
 
 async def test_memories_saved_without_a_model_are_backfilled(engine: AsyncEngine) -> None:
@@ -160,6 +190,7 @@ async def test_memories_saved_without_a_model_are_backfilled(engine: AsyncEngine
         MemoryKind.PREFERENCE,
         source=MemorySource.USER,
         status=MemoryStatus.ACTIVE,
+        owner=LOCAL_USER,
     )
 
     class Broken(TopicEmbedder):
@@ -172,13 +203,16 @@ async def test_memories_saved_without_a_model_are_backfilled(engine: AsyncEngine
         MemoryKind.PREFERENCE,
         source=MemorySource.USER,
         status=MemoryStatus.ACTIVE,
+        owner=LOCAL_USER,
     )
     assert kept.content == "Is vegetarian"  # stored anyway, without a vector
 
     store = MemoryStore(engine, embedder=TopicEmbedder())
     assert await store.backfill() == 2
     assert await store.backfill() == 0
-    assert [m.id for m in await store.search("where do I sit on a plane")] == [memory.id]
+    assert [m.id for m in await store.search("where do I sit on a plane", owner=LOCAL_USER)] == [
+        memory.id
+    ]
 
 
 def _model_cached() -> bool:
@@ -197,13 +231,15 @@ async def test_the_local_model_recalls_by_meaning(engine: AsyncEngine) -> None:
         MemoryKind.PREFERENCE,
         source=MemorySource.USER,
         status=MemoryStatus.ACTIVE,
+        owner=LOCAL_USER,
     )
     await store.create(
         "Is vegetarian and avoids fish",
         MemoryKind.PREFERENCE,
         source=MemorySource.USER,
         status=MemoryStatus.ACTIVE,
+        owner=LOCAL_USER,
     )
-    found = await store.search("where do I like to sit on an airplane")
+    found = await store.search("where do I like to sit on an airplane", owner=LOCAL_USER)
     assert found
     assert found[0].id == seat.id

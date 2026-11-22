@@ -18,7 +18,8 @@ import { APPROVALS_CHANGED } from "@/components/approval-card";
 import { OPEN_PALETTE, useShell } from "@/components/shell";
 import { THREADS_CHANGED } from "@/lib/api";
 import { authEnabled, signOut } from "@/lib/auth";
-import { isActive, NAV_ITEMS } from "@/lib/nav";
+import { useMe } from "@/lib/me";
+import { isActive, navFor } from "@/lib/nav";
 import {
   nextTheme,
   setTheme,
@@ -30,6 +31,7 @@ import { cn } from "@/lib/utils";
 
 export function ThreadSidebar() {
   const pathname = usePathname();
+  const me = useMe();
   const { drawerOpen } = useShell();
   const [threads, setThreads] = useState<Thread[]>([]);
   const [offline, setOffline] = useState(false);
@@ -80,29 +82,31 @@ export function ThreadSidebar() {
         </Link>
       </div>
       <div data-tour="nav" className="space-y-0.5 px-2 pb-2">
-        {NAV_ITEMS.filter((item) => item.href !== "/welcome").map((item) => (
-          <Link
-            key={item.href}
-            href={item.href}
-            className={cn(
-              "flex items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-muted",
-              isActive(pathname, item.href) && "bg-muted font-medium",
-            )}
-          >
-            <item.icon className="size-3.5 text-muted-foreground" />
-            {item.label}
-            {item.href === "/inbox" && pending > 0 && (
-              <span className="ml-auto rounded-full bg-amber-500 px-1.5 text-white text-xs tabular-nums">
-                {pending}
-              </span>
-            )}
-            {item.href === "/settings" && actionsOff && (
-              <span className="ml-auto rounded bg-destructive px-1.5 text-white text-xs">
-                off
-              </span>
-            )}
-          </Link>
-        ))}
+        {navFor(me.role)
+          .filter((item) => item.href !== "/welcome")
+          .map((item) => (
+            <Link
+              key={item.href}
+              href={item.href}
+              className={cn(
+                "flex items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-muted",
+                isActive(pathname, item.href) && "bg-muted font-medium",
+              )}
+            >
+              <item.icon className="size-3.5 text-muted-foreground" />
+              {item.label}
+              {item.href === "/inbox" && pending > 0 && (
+                <span className="ml-auto rounded-full bg-amber-500 px-1.5 text-white text-xs tabular-nums">
+                  {pending}
+                </span>
+              )}
+              {item.href === "/settings" && actionsOff && (
+                <span className="ml-auto rounded bg-destructive px-1.5 text-white text-xs">
+                  off
+                </span>
+              )}
+            </Link>
+          ))}
       </div>
       <div className="px-4 pb-1 text-muted-foreground text-xs">Threads</div>
       <nav className="flex-1 overflow-y-auto px-2 pb-4" aria-label="Threads">

@@ -188,7 +188,7 @@ def demo_settings(database_url: str | None = None) -> ApiSettings:
         )
 
 
-async def _discard(notification: Notification, key: str) -> None:
+async def _discard(notification: Notification, key: str, user_id: str) -> None:
     return None
 
 

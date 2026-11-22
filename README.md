@@ -46,7 +46,8 @@ To use a real model, put `ANTHROPIC_API_KEY` in `.env` (copy `.env.example`), ru
 | **Notifications** | Email through Amazon SES, browser push, and a weekly digest. |
 | **Memory** | Facts the agent proposes and you confirm, with semantic recall from a local embedding model. |
 | **Tools** | Web search and fetch, flights, deals, an isolated Playwright browser, and any MCP server. Content from the web is treated as data, never as instructions, and is screened for prompt injection. |
-| **Guard rails** | A daily spend cap, rate limits and budgets per run. |
+| **Guard rails** | A daily spend cap overall and per user, rate limits and budgets per run. |
+| **People** | Invite others from the Users page; each gets private chats, tasks, memories and approvals (ADR-018). |
 | **Evals** | 95 golden cases held to a baseline in CI, an LLM judge calibrated against your own labels, and online scoring of production runs. |
 | **App** | Works on phones, installs as a PWA, has a ⌘K command palette, and supports light and dark themes. |
 

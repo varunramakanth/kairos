@@ -39,7 +39,8 @@ from kairos_domain.scheduling import Claim, Finished, Firing, PreviousAlert, Set
 
 _MESSAGES = TypeAdapter[list[Message]](list[Message])
 _JOB_COLUMNS = (
-    "id, spec, status, next_run_at, last_run_at, consecutive_failures, created_at, updated_at"
+    "id, user_id, spec, status, next_run_at, last_run_at, consecutive_failures, "
+    "created_at, updated_at"
 )
 
 
@@ -59,6 +60,7 @@ class JobStore:
         job_id: str,
         spec: JobSpec,
         *,
+        owner: str,
         status: JobStatus,
         next_run_at: datetime | None,
         now: datetime,
@@ -66,87 +68,119 @@ class JobStore:
         async with self._engine.begin() as connection:
             await connection.execute(
                 text(
-                    "INSERT INTO jobs (id, spec, status, next_run_at, created_at, updated_at) "
-                    "VALUES (:id, CAST(:spec AS jsonb), :status, :next, :now, :now) "
-                    "ON CONFLICT (id) DO NOTHING"
+                    "INSERT INTO jobs (id, user_id, spec, status, next_run_at, created_at, "
+                    "updated_at) VALUES (:id, :owner, CAST(:spec AS jsonb), :status, :next, "
+                    ":now, :now) ON CONFLICT (id) DO NOTHING"
                 ),
                 {
                     "id": job_id,
+                    "owner": owner,
                     "spec": spec.model_dump_json(),
                     "status": status.value,
                     "next": next_run_at,
                     "now": now,
                 },
             )
-            job = await _get(connection, job_id)
-        assert job is not None  # noqa: S101 (just inserted or already present)
+            job = await _get(connection, job_id, owner=owner)
+        if job is None:
+            raise ValueError(f"job {job_id} belongs to another user")
         return job
 
-    async def get(self, job_id: str) -> Job | None:
+    async def get(self, job_id: str, *, owner: str) -> Job | None:
         async with self._engine.connect() as connection:
-            return await _get(connection, job_id)
+            return await _get(connection, job_id, owner=owner)
 
-    async def list_jobs(self, *, include_deleted: bool = False) -> Sequence[Job]:
-        where = "" if include_deleted else "WHERE status <> 'deleted'"
+    async def list_jobs(self, *, owner: str, include_deleted: bool = False) -> Sequence[Job]:
+        where = "" if include_deleted else "AND status <> 'deleted'"
         async with self._engine.connect() as connection:
             rows = await connection.execute(
-                text(f"SELECT {_JOB_COLUMNS} FROM jobs {where} ORDER BY created_at DESC")  # noqa: S608
+                text(
+                    f"SELECT {_JOB_COLUMNS} FROM jobs WHERE user_id = :owner {where} "  # noqa: S608
+                    "ORDER BY created_at DESC"
+                ),
+                {"owner": owner},
             )
             return [_job(row) for row in rows.mappings()]
 
     async def set_status(
-        self, job_id: str, status: JobStatus, *, next_run_at: datetime | None, now: datetime
+        self,
+        job_id: str,
+        status: JobStatus,
+        *,
+        owner: str,
+        next_run_at: datetime | None,
+        now: datetime,
     ) -> Job | None:
         async with self._engine.begin() as connection:
             await connection.execute(
                 text(
                     "UPDATE jobs SET status = :status, next_run_at = :next, "
                     "consecutive_failures = CASE WHEN :status = 'active' THEN 0 "
-                    "ELSE consecutive_failures END, updated_at = :now WHERE id = :id"
+                    "ELSE consecutive_failures END, updated_at = :now "
+                    "WHERE id = :id AND user_id = :owner"
                 ),
-                {"id": job_id, "status": status.value, "next": next_run_at, "now": now},
+                {
+                    "id": job_id,
+                    "owner": owner,
+                    "status": status.value,
+                    "next": next_run_at,
+                    "now": now,
+                },
             )
-            return await _get(connection, job_id)
+            return await _get(connection, job_id, owner=owner)
 
     async def update_spec(
-        self, job_id: str, spec: JobSpec, *, next_run_at: datetime | None, now: datetime
+        self,
+        job_id: str,
+        spec: JobSpec,
+        *,
+        owner: str,
+        next_run_at: datetime | None,
+        now: datetime,
     ) -> Job | None:
         async with self._engine.begin() as connection:
             await connection.execute(
                 text(
                     "UPDATE jobs SET spec = CAST(:spec AS jsonb), "
                     "next_run_at = CASE WHEN status = 'active' THEN :next ELSE next_run_at END, "
-                    "updated_at = :now WHERE id = :id"
+                    "updated_at = :now WHERE id = :id AND user_id = :owner"
                 ),
-                {"id": job_id, "spec": spec.model_dump_json(), "next": next_run_at, "now": now},
+                {
+                    "id": job_id,
+                    "owner": owner,
+                    "spec": spec.model_dump_json(),
+                    "next": next_run_at,
+                    "now": now,
+                },
             )
-            return await _get(connection, job_id)
+            return await _get(connection, job_id, owner=owner)
 
-    async def run_now(self, job_id: str, *, now: datetime) -> Job | None:
+    async def run_now(self, job_id: str, *, owner: str, now: datetime) -> Job | None:
         """Make an active job due immediately."""
         async with self._engine.begin() as connection:
             await connection.execute(
                 text(
                     "UPDATE jobs SET next_run_at = :now, updated_at = :now "
-                    "WHERE id = :id AND status = 'active'"
+                    "WHERE id = :id AND user_id = :owner AND status = 'active'"
                 ),
-                {"id": job_id, "now": now},
+                {"id": job_id, "owner": owner, "now": now},
             )
-            return await _get(connection, job_id)
+            return await _get(connection, job_id, owner=owner)
 
-    async def pause_all(self, *, now: datetime) -> int:
-        """The kill switch: pause every active job."""
+    async def pause_all(self, *, owner: str, now: datetime) -> int:
+        """Pause every active job of ``owner``."""
         async with self._engine.begin() as connection:
             result = await connection.execute(
                 text(
-                    "UPDATE jobs SET status = 'paused', updated_at = :now WHERE status = 'active'"
+                    "UPDATE jobs SET status = 'paused', updated_at = :now "
+                    "WHERE status = 'active' AND user_id = :owner"
                 ),
-                {"now": now},
+                {"now": now, "owner": owner},
             )
         return result.rowcount
 
-    async def summaries(self) -> list[JobSummary]:
-        jobs = await self.list_jobs()
+    async def summaries(self, *, owner: str) -> list[JobSummary]:
+        jobs = await self.list_jobs(owner=owner)
         if not jobs:
             return []
         ids = [job.id for job in jobs]
@@ -192,9 +226,9 @@ class JobStore:
             for job in jobs
         ]
 
-    async def detail(self, job_id: str, *, limit: int = 100) -> JobDetail | None:
+    async def detail(self, job_id: str, *, owner: str, limit: int = 100) -> JobDetail | None:
         async with self._engine.connect() as connection:
-            job = await _get(connection, job_id)
+            job = await _get(connection, job_id, owner=owner)
             if job is None:
                 return None
             runs = await connection.execute(
@@ -331,20 +365,26 @@ class JobStore:
             await insert_notification(
                 connection,
                 notification,
+                user_id=claim.job.user_id,
                 dedupe_key=f"digest:{claim.job.id}:{scheduled_for.isoformat()}",
             )
             await insert_audit(
-                connection, actor="system", action="digest.queued", subject=claim.job.id
+                connection,
+                user_id=claim.job.user_id,
+                actor="system",
+                action="digest.queued",
+                subject=claim.job.id,
             )
         return True
 
-    async def digest_data(self, *, since: datetime, until: datetime) -> DigestData:
-        params = {"since": since, "until": until}
+    async def digest_data(self, *, owner: str, since: datetime, until: datetime) -> DigestData:
+        params = {"owner": owner, "since": since, "until": until}
         async with self._engine.connect() as connection:
             alerts = await connection.execute(
                 text(
                     "SELECT j.spec->>'name' AS name, a.message FROM alerts a JOIN jobs j "
-                    "ON j.id = a.job_id WHERE a.created_at >= :since AND a.created_at < :until "
+                    "ON j.id = a.job_id WHERE j.user_id = :owner "
+                    "AND a.created_at >= :since AND a.created_at < :until "
                     "ORDER BY a.created_at"
                 ),
                 params,
@@ -360,7 +400,7 @@ class JobStore:
                       FROM jobs j
                       JOIN job_runs r ON r.job_id = j.id
                        AND r.created_at >= :since AND r.created_at < :until
-                     WHERE j.spec->>'kind' <> 'digest'
+                     WHERE j.spec->>'kind' <> 'digest' AND j.user_id = :owner
                      GROUP BY j.id ORDER BY j.spec->>'name'
                     """
                 ),
@@ -368,14 +408,19 @@ class JobStore:
             )
             pending = (
                 await connection.execute(
-                    text("SELECT count(*) FROM approvals WHERE status = 'pending'")
+                    text(
+                        "SELECT count(*) FROM approvals a JOIN runs r ON r.id = a.run_id "
+                        "WHERE a.status = 'pending' AND r.user_id = :owner"
+                    ),
+                    params,
                 )
             ).scalar_one()
             spend = (
                 await connection.execute(
                     text(
                         "SELECT count(*) AS runs, COALESCE(sum((state->>'cost_usd')::float), 0) "
-                        "AS cost FROM runs WHERE created_at >= :since AND created_at < :until"
+                        "AS cost FROM runs WHERE user_id = :owner "
+                        "AND created_at >= :since AND created_at < :until"
                     ),
                     params,
                 )
@@ -438,7 +483,7 @@ class JobStore:
             )
             if row is None:
                 return False
-            job = await _get(connection, row["job_id"], lock=True)
+            job = await _get(connection, row["job_id"], owner=None, lock=True)
             assert job is not None  # noqa: S101 (foreign key)
             job_run = JobRun.model_validate({k: row[k] for k in JobRun.model_fields if k in row})
             finished = Finished(
@@ -455,13 +500,19 @@ class JobStore:
         return True
 
 
-async def _get(connection: AsyncConnection, job_id: str, *, lock: bool = False) -> Job | None:
+async def _get(
+    connection: AsyncConnection, job_id: str, *, owner: str | None, lock: bool = False
+) -> Job | None:
+    """A job by id; with ``owner``, only if it is theirs. ``None`` is the scheduler."""
     suffix = " FOR UPDATE" if lock else ""
     row = (
         (
             await connection.execute(
-                text(f"SELECT {_JOB_COLUMNS} FROM jobs WHERE id = :id{suffix}"),  # noqa: S608
-                {"id": job_id},
+                text(
+                    f"SELECT {_JOB_COLUMNS} FROM jobs WHERE id = :id "  # noqa: S608
+                    f"AND (CAST(:owner AS text) IS NULL OR user_id = :owner){suffix}"
+                ),
+                {"id": job_id, "owner": owner},
             )
         )
         .mappings()
@@ -547,6 +598,7 @@ async def _record(
                 body=outcome.alert,
                 url=f"/tasks/{job.id}",
             ),
+            user_id=job.user_id,
             dedupe_key=f"alert:{job.id}:{outcome.dedupe_key}:{run_id}",
         )
         await connection.execute(

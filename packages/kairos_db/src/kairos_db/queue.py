@@ -60,18 +60,19 @@ _ABANDON = text(
 
 
 _INSERT_RUN = text(
-    "INSERT INTO runs (id, thread_id, status, request) "
-    "VALUES (:id, :thread_id, 'queued', CAST(:request AS jsonb))"
+    "INSERT INTO runs (id, thread_id, user_id, status, request) "
+    "VALUES (:id, :thread_id, :user_id, 'queued', CAST(:request AS jsonb))"
 )
 
 
 async def insert_run(connection: AsyncConnection, request: RunRequest) -> None:
-    """Queue a run inside the caller's transaction."""
+    """Queue a run inside the caller's transaction, owned by ``request.user_id``."""
     await connection.execute(
         _INSERT_RUN,
         {
             "id": request.run_id,
             "thread_id": request.thread_id,
+            "user_id": request.user_id,
             "request": request.model_dump_json(),
         },
     )

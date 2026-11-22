@@ -527,7 +527,10 @@ class AgentLoop:
     async def _execute(self, session: _Session, call: ToolCallRecord) -> tuple[ToolOutput, int]:
         started = session.clock.monotonic()
         context = ToolContext(
-            run_id=session.state.run_id, tool_call_id=call.id, idempotency_key=call.idempotency_key
+            run_id=session.state.run_id,
+            tool_call_id=call.id,
+            idempotency_key=call.idempotency_key,
+            user_id=session.state.request.user_id,
         )
         try:
             output = await self._tools.execute(call, context)

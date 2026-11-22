@@ -30,6 +30,7 @@ deployment changes.
 | **The local network** | Pages may try to reach private addresses (SSRF) or race DNS (rebinding). |
 | **The owner, by mistake** | A vague request, a runaway watch, or approving something without reading it. |
 | **Someone who obtains a key** | They can spend against the API keys; the SES key can only email the owner. |
+| **An invited user** (ADR-018) | Signed in with MFA, but must never see or change another user's data, use admin features, or spend without limit. |
 
 ## Entry points and mitigations
 
@@ -102,9 +103,17 @@ Moving the repository out of the synced folder is recommended.
 | Nightly local backups, kept 14 days, with a tested restore | ADR-015 |
 | Leases fence every worker write; history is append-only | ADR-003 |
 
-## Out of scope (single user, local)
+### 7. One user reaching another's data (M10, ADR-018)
 
-- Multi-user isolation and authentication: the API listens on localhost. Cognito
-  login arrives with the AWS deployment (M8).
+- **Every row has an owner.** Root tables carry `user_id`; child rows are reached through their parent. Store methods take a required `owner`, so a query cannot forget the filter without pyright noticing.
+- **Fails closed at every layer.** `user_id` has no database default, so an insert without an owner fails. A valid Cognito sign-in with no Kairos user is a 403. Another user's id is a 404, exactly like a missing one.
+- **Tools act for the run's user.** `ToolContext.user_id` comes from the run, never from the model: `notify_me` can only reach that user's verified address and browsers; memory and schedule tools only see that user's rows.
+- **Admin only:** inviting and removing users, evals, the kill switch. Enforced by the API; the UI just hides them.
+- **Spend:** a daily cap per user, plus the overall cap.
+- **Tested by walking every route:** `tests/integration/test_users.py` calls each route as a second user with the first user's ids and fails on any leak, any change, or a new route it does not know.
+
+## Out of scope
+
+- Local development: the API listens on localhost with sign-in off, as the `local` admin.
 - Supply-chain review of dependencies beyond pinned versions and a committed lock file.
 - A compromised developer machine.

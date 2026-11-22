@@ -25,6 +25,7 @@ from kairos_domain.jobs import (
     OneShotSchedule,
     WatchSpec,
 )
+from kairos_domain.users import LOCAL_USER
 from kairos_harness import AgentLoop, FakeClock, SeededIdGenerator
 from kairos_harness.testing import ScriptedProvider, Turn, text_turn, tool_turn
 from kairos_scheduler.scheduler import Scheduler
@@ -104,6 +105,7 @@ async def test_a_due_job_fires_exactly_once_under_competing_schedulers(engine: A
         status=JobStatus.ACTIVE,
         next_run_at=NOW,
         now=NOW,
+        owner=LOCAL_USER,
     )
 
     results = await asyncio.gather(*(scheduler(store, clock, f"s{i}").tick() for i in range(6)))
@@ -115,7 +117,7 @@ async def test_a_due_job_fires_exactly_once_under_competing_schedulers(engine: A
     assert len(runs) == 1
     assert runs[0].job == job.id
     assert 'Scheduled task "Morning brief"' in runs[0].input
-    reloaded = await store.get(job.id)
+    reloaded = await store.get(job.id, owner=LOCAL_USER)
     assert reloaded is not None
     assert reloaded.next_run_at == NOW + timedelta(hours=1)
 
@@ -130,13 +132,14 @@ async def test_missed_firings_collapse_into_one_catch_up_run(engine: AsyncEngine
         status=JobStatus.ACTIVE,
         next_run_at=three_days_ago,
         now=three_days_ago,
+        owner=LOCAL_USER,
     )
 
     result = await scheduler(store, clock).tick()
 
     assert result.fired == ["job_1"]
     assert len(await rows(engine, "SELECT id FROM runs")) == 1
-    job = await store.get("job_1")
+    job = await store.get("job_1", owner=LOCAL_USER)
     assert job is not None
     assert job.next_run_at == datetime(2026, 11, 18, 13, 0, tzinfo=UTC)  # tomorrow 08:00 EST
 
@@ -149,6 +152,7 @@ async def test_a_job_does_not_overlap_its_own_running_run(engine: AsyncEngine) -
         status=JobStatus.ACTIVE,
         next_run_at=NOW,
         now=NOW,
+        owner=LOCAL_USER,
     )
     sched = scheduler(store, clock)
     assert (await sched.tick()).fired == ["job_1"]
@@ -166,7 +170,9 @@ async def test_a_job_does_not_overlap_its_own_running_run(engine: AsyncEngine) -
 
 async def test_a_watch_alerts_once_per_new_low_and_respects_dedupe(engine: AsyncEngine) -> None:
     store, clock = JobStore(engine), FakeClock(NOW)
-    await store.create("job_w", FARE_WATCH, status=JobStatus.ACTIVE, next_run_at=NOW, now=NOW)
+    await store.create(
+        "job_w", FARE_WATCH, status=JobStatus.ACTIVE, next_run_at=NOW, now=NOW, owner=LOCAL_USER
+    )
     sched = scheduler(store, clock)
 
     async def check(value: float) -> None:
@@ -180,7 +186,7 @@ async def test_a_watch_alerts_once_per_new_low_and_respects_dedupe(engine: Async
     await check(1420)  # same price again: deduped
     await check(1380)  # a new low: alert
 
-    detail = await store.detail("job_w")
+    detail = await store.detail("job_w", owner=LOCAL_USER)
     assert detail is not None
     assert [o.observation.value for o in reversed(detail.observations)] == [1620, 1420, 1420, 1380]
     assert [o.matched for o in reversed(detail.observations)] == [False, True, True, True]
@@ -188,7 +194,7 @@ async def test_a_watch_alerts_once_per_new_low_and_respects_dedupe(engine: Async
         "lowest fare in CAD is 1420 CAD, below 1500",
         "lowest fare in CAD is 1380 CAD, below 1500",
     ]
-    summaries = await store.summaries()
+    summaries = await store.summaries(owner=LOCAL_USER)
     assert summaries[0].recent_values == [1620, 1420, 1420, 1380]
     assert summaries[0].alert_count == 2
 
@@ -196,7 +202,9 @@ async def test_a_watch_alerts_once_per_new_low_and_respects_dedupe(engine: Async
 async def test_a_watch_run_without_an_observation_fails_and_backs_off(engine: AsyncEngine) -> None:
     store, clock = JobStore(engine), FakeClock(NOW)
     spec = FARE_WATCH.model_copy(update={"schedule": IntervalSchedule(every_seconds=300)})
-    await store.create("job_w", spec, status=JobStatus.ACTIVE, next_run_at=NOW, now=NOW)
+    await store.create(
+        "job_w", spec, status=JobStatus.ACTIVE, next_run_at=NOW, now=NOW, owner=LOCAL_USER
+    )
     sched = scheduler(store, clock)
 
     await sched.tick()
@@ -204,7 +212,7 @@ async def test_a_watch_run_without_an_observation_fails_and_backs_off(engine: As
     await sched.tick()
     await sched.tick()  # settle happens first; nothing is due during backoff
 
-    job = await store.get("job_w")
+    job = await store.get("job_w", owner=LOCAL_USER)
     assert job is not None
     assert job.consecutive_failures == 1
     assert job.next_run_at == NOW + timedelta(minutes=5)
@@ -217,7 +225,7 @@ async def test_a_watch_run_without_an_observation_fails_and_backs_off(engine: As
     await execute_queued_run(engine, [ProviderError("overloaded", retryable=False)])
     clock.advance(1)
     await sched.tick()
-    job = await store.get("job_w")
+    job = await store.get("job_w", owner=LOCAL_USER)
     assert job is not None
     assert job.consecutive_failures == 2
     assert job.next_run_at is not None
@@ -227,7 +235,12 @@ async def test_a_watch_run_without_an_observation_fails_and_backs_off(engine: As
 async def test_one_shot_jobs_complete_and_expired_jobs_stop(engine: AsyncEngine) -> None:
     store, clock = JobStore(engine), FakeClock(NOW)
     await store.create(
-        "job_once", task(OneShotSchedule(at=NOW)), status=JobStatus.ACTIVE, next_run_at=NOW, now=NOW
+        "job_once",
+        task(OneShotSchedule(at=NOW)),
+        status=JobStatus.ACTIVE,
+        next_run_at=NOW,
+        now=NOW,
+        owner=LOCAL_USER,
     )
     await store.create(
         "job_old",
@@ -235,13 +248,17 @@ async def test_one_shot_jobs_complete_and_expired_jobs_stop(engine: AsyncEngine)
         status=JobStatus.ACTIVE,
         next_run_at=NOW,
         now=NOW,
+        owner=LOCAL_USER,
     )
 
     result = await scheduler(store, clock).tick()
 
     assert result.fired == ["job_once"]
     assert result.expired == ["job_old"]
-    once, old = await store.get("job_once"), await store.get("job_old")
+    once, old = (
+        await store.get("job_once", owner=LOCAL_USER),
+        await store.get("job_old", owner=LOCAL_USER),
+    )
     assert once is not None
     assert old is not None
     assert (once.status, once.next_run_at) == (JobStatus.COMPLETED, None)
@@ -251,13 +268,32 @@ async def test_one_shot_jobs_complete_and_expired_jobs_stop(engine: AsyncEngine)
 async def test_paused_and_unconfirmed_jobs_never_fire(engine: AsyncEngine) -> None:
     store, clock = JobStore(engine), FakeClock(NOW)
     every_hour = IntervalSchedule(every_seconds=3600)
-    await store.create("job_p", task(every_hour), status=JobStatus.PAUSED, next_run_at=NOW, now=NOW)
     await store.create(
-        "job_u", task(every_hour), status=JobStatus.PENDING_CONFIRMATION, next_run_at=NOW, now=NOW
+        "job_p",
+        task(every_hour),
+        status=JobStatus.PAUSED,
+        next_run_at=NOW,
+        now=NOW,
+        owner=LOCAL_USER,
     )
-    await store.create("job_a", task(every_hour), status=JobStatus.ACTIVE, next_run_at=NOW, now=NOW)
+    await store.create(
+        "job_u",
+        task(every_hour),
+        status=JobStatus.PENDING_CONFIRMATION,
+        next_run_at=NOW,
+        now=NOW,
+        owner=LOCAL_USER,
+    )
+    await store.create(
+        "job_a",
+        task(every_hour),
+        status=JobStatus.ACTIVE,
+        next_run_at=NOW,
+        now=NOW,
+        owner=LOCAL_USER,
+    )
 
-    assert await store.pause_all(now=NOW) == 1
+    assert await store.pause_all(now=NOW, owner=LOCAL_USER) == 1
     assert (await scheduler(store, clock).tick()).fired == []
 
 
@@ -273,6 +309,7 @@ async def test_a_cron_job_follows_the_wall_clock_through_spring_forward(
         status=JobStatus.ACTIVE,
         next_run_at=datetime(2026, 3, 8, 12, 0, tzinfo=UTC),
         now=clock.now(),
+        owner=LOCAL_USER,
     )
     sched = scheduler(store, clock)
 
@@ -280,7 +317,7 @@ async def test_a_cron_job_follows_the_wall_clock_through_spring_forward(
     assert (await sched.tick()).fired == []
     clock.advance(HOUR)  # Sun 08:00 EDT
     assert (await sched.tick()).fired == ["job_1"]
-    job = await store.get("job_1")
+    job = await store.get("job_1", owner=LOCAL_USER)
     assert job is not None
     assert job.next_run_at == datetime(2026, 3, 9, 12, 0, tzinfo=UTC)
 
@@ -300,9 +337,15 @@ async def test_the_weekly_digest_is_built_from_data_and_queued(engine: AsyncEngi
         status=JobStatus.ACTIVE,
         next_run_at=next_fire(spec.schedule, after=clock.now()),
         now=clock.now(),
+        owner=LOCAL_USER,
     )
     await store.create(
-        "job_w", FARE_WATCH, status=JobStatus.ACTIVE, next_run_at=clock.now(), now=clock.now()
+        "job_w",
+        FARE_WATCH,
+        status=JobStatus.ACTIVE,
+        next_run_at=clock.now(),
+        now=clock.now(),
+        owner=LOCAL_USER,
     )
     sched = scheduler(store, clock)
     await sched.tick()
@@ -320,7 +363,7 @@ async def test_the_weekly_digest_is_built_from_data_and_queued(engine: AsyncEngi
     assert digest["title"] == "Weekly digest: 1 alerts"
     assert "YYZ-CJB fare: lowest fare in CAD is 1420 CAD, below 1500" in digest["body"]
     assert digest["channels"] == ["console", "email"]
-    detail = await store.detail(DIGEST_JOB_ID)
+    detail = await store.detail(DIGEST_JOB_ID, owner=LOCAL_USER)
     assert detail is not None
     (run,) = detail.runs
     assert (run.run_id, run.status) == (None, JobRunStatus.SUCCEEDED)

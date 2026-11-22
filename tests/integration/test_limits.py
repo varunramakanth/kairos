@@ -17,6 +17,7 @@ from kairos_db.governance import NotificationStore
 from kairos_db.spend import SpendLedger
 from kairos_domain.model import ModelRequest
 from kairos_domain.run import RunRequest, RunState
+from kairos_domain.users import LOCAL_USER
 from kairos_harness import BudgetStop, FakeClock
 from kairos_harness.testing import ScriptedProvider, text_turn
 from kairos_worker.spend import SpendCap, SpendCapHooks
@@ -27,17 +28,20 @@ pytestmark = pytest.mark.integration
 NOON = datetime(2026, 11, 18, 17, 0, tzinfo=UTC)  # 12:00 in Toronto
 
 
-async def spend(engine: AsyncEngine, amount: float, *, at: datetime = NOON) -> None:
-    """A finished run whose one model call cost ``amount``."""
-    run_id = f"run_{abs(hash((amount, at))) % 10**9}"
+async def spend(
+    engine: AsyncEngine, amount: float, *, at: datetime = NOON, owner: str = LOCAL_USER
+) -> None:
+    """A finished run of ``owner`` whose one model call cost ``amount``."""
+    run_id = f"run_{abs(hash((amount, at, owner))) % 10**9}"
     async with engine.begin() as connection:
         await connection.execute(
             text(
-                "INSERT INTO runs (id, status, request) VALUES (:id, 'finished', "
-                "CAST(:request AS jsonb))"
+                "INSERT INTO runs (id, status, request, user_id) VALUES (:id, 'finished', "
+                "CAST(:request AS jsonb), :owner)"
             ),
             {
                 "id": run_id,
+                "owner": owner,
                 "request": RunRequest(run_id=run_id, input="x", model="m").model_dump_json(),
             },
         )

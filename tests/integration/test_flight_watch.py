@@ -19,6 +19,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine
 from kairos_db import JobStore, PostgresCheckpointer, RunQueue
 from kairos_domain.jobs import JobStatus
 from kairos_domain.run import RunRequest
+from kairos_domain.users import LOCAL_USER
 from kairos_harness import AgentLoop, FakeClock, InMemoryCheckpointer
 from kairos_harness.testing import ScriptedProvider, Turn, text_turn, tool_turn
 from kairos_policy import PolicyHooks
@@ -78,7 +79,7 @@ async def test_a_fare_watch_alerts_once_per_new_low_from_proposal_to_outbox(
         hooks=PolicyHooks(),  # schedule_create is a proposal: no approval prompt
     )
     _ = [e async for e in chat.run(RunRequest(run_id="chat", input="Watch fares", model="m"))]
-    (job,) = await store.list_jobs()
+    (job,) = await store.list_jobs(owner=LOCAL_USER)
     assert job.status is JobStatus.PENDING_CONFIRMATION
     sched = scheduler(store, clock)
     assert (await sched.tick()).fired == []  # unconfirmed jobs never fire
@@ -89,6 +90,7 @@ async def test_a_fare_watch_alerts_once_per_new_low_from_proposal_to_outbox(
         JobStatus.ACTIVE,
         next_run_at=next_fire(job.spec.schedule, after=clock.now()),
         now=clock.now(),
+        owner=LOCAL_USER,
     )
 
     # 3. Five firings, six hours apart, through the real scheduler, worker and outbox.
@@ -113,7 +115,7 @@ async def test_a_fare_watch_alerts_once_per_new_low_from_proposal_to_outbox(
     assert {(q.origin, q.destination, str(q.return_date)) for q in provider.queries} == {
         ("YYZ", "CJB", "2026-12-20")
     }
-    detail = await store.detail(job.id)
+    detail = await store.detail(job.id, owner=LOCAL_USER)
     assert detail is not None
     assert [o.observation.value for o in reversed(detail.observations)] == fares
     # One alert when it first drops below $1,200, one for the new low; none for the

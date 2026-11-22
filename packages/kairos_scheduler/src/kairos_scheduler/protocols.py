@@ -16,13 +16,15 @@ __all__ = ["Claim", "Finished", "Firing", "JobRepository", "SchedulerStore", "Se
 
 
 class JobRepository(Protocol):
-    """Create, read and change jobs. Used by the API and the schedule tools."""
+    """Create, read and change one user's jobs (ADR-018). Used by the API and the
+    schedule tools."""
 
     async def create(
         self,
         job_id: str,
         spec: JobSpec,
         *,
+        owner: str,
         status: JobStatus,
         next_run_at: datetime | None,
         now: datetime,
@@ -30,12 +32,20 @@ class JobRepository(Protocol):
         """Insert a job; creating an existing id returns the existing job unchanged."""
         ...
 
-    async def get(self, job_id: str) -> Job | None: ...
+    async def get(self, job_id: str, *, owner: str) -> Job | None:
+        """``owner``'s job, or ``None`` (another user's job looks missing)."""
+        ...
 
-    async def list_jobs(self, *, include_deleted: bool = False) -> Sequence[Job]: ...
+    async def list_jobs(self, *, owner: str, include_deleted: bool = False) -> Sequence[Job]: ...
 
     async def set_status(
-        self, job_id: str, status: JobStatus, *, next_run_at: datetime | None, now: datetime
+        self,
+        job_id: str,
+        status: JobStatus,
+        *,
+        owner: str,
+        next_run_at: datetime | None,
+        now: datetime,
     ) -> Job | None: ...
 
 
@@ -64,7 +74,9 @@ class SchedulerStore(JobRepository, Protocol):
         """Record a digest firing and queue its notification."""
         ...
 
-    async def digest_data(self, *, since: datetime, until: datetime) -> DigestData: ...
+    async def digest_data(self, *, owner: str, since: datetime, until: datetime) -> DigestData:
+        """One user's week, for their digest."""
+        ...
 
     async def close(self, claim: Claim, status: JobStatus, *, now: datetime) -> bool:
         """End a job without firing it (expired)."""

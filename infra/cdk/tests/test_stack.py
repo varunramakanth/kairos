@@ -120,19 +120,27 @@ def test_cognito_requires_mfa_and_admin_created_users(template: Template) -> Non
     template.has_resource_properties("AWS::Cognito::UserPoolUser", {"Username": OWNER})
 
 
-def test_task_may_send_email_only_to_and_from_the_owner(template: Template) -> None:
+def _statements(template: Template) -> list[dict[str, Any]]:
     policies = template.find_resources("AWS::IAM::Policy")
-    ses = [
-        s
-        for p in policies.values()
-        for s in p["Properties"]["PolicyDocument"]["Statement"]
-        if s["Action"] == "ses:SendEmail"
-    ]
+    return [s for p in policies.values() for s in p["Properties"]["PolicyDocument"]["Statement"]]
+
+
+def test_task_sends_email_only_from_the_owner(template: Template) -> None:
+    ses = [s for s in _statements(template) if s["Action"] == "ses:SendEmail"]
     assert len(ses) == 1
-    assert ses[0]["Condition"] == {
-        "StringEquals": {"ses:FromAddress": OWNER},
-        "ForAllValues:StringEquals": {"ses:Recipients": [OWNER]},
-    }
+    # Any verified recipient (invited users, ADR-018); the SES sandbox refuses the rest.
+    assert ses[0]["Condition"] == {"StringEquals": {"ses:FromAddress": OWNER}}
+
+
+def test_task_manages_users_of_its_own_pool_only(template: Template) -> None:
+    cognito = [
+        s
+        for s in _statements(template)
+        if isinstance(s["Action"], list) and "cognito-idp:AdminCreateUser" in s["Action"]
+    ]
+    assert len(cognito) == 1
+    assert "Fn::GetAtt" in cognito[0]["Resource"]  # the pool's ARN, not "*"
+    assert not any(a.endswith("*") for a in cognito[0]["Action"])
 
 
 def test_api_secrets_are_injected_not_plain_environment(template: Template) -> None:

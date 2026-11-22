@@ -189,7 +189,7 @@ When the task starts, ECS reads both secrets and hands the values to the api con
 
 Cognito is AWS's user directory and login service. Kairos's **user pool**:
 
-- has **one user, you**, created by the deploy with your email address;
+- starts with **one user, you**, created by the deploy with your email address; you can invite more people from the app's **Users** page, and each gets their own private chats, tasks and memories;
 - allows **no self sign-up**, so nobody else can create an account;
 - requires **multi-factor authentication** with an authenticator app (TOTP), and passwords of at least 12 characters.
 
@@ -197,7 +197,7 @@ When you open the app, the web UI sends you to Cognito's sign-in page at `https:
 
 ### Email: SES
 
-Amazon **SES** (Simple Email Service) sends Kairos's emails: alerts, the weekly digest, and messages you approve. The task's permissions allow sending **only from and to your verified address**, so even a compromised agent couldn't email anyone else.
+Amazon **SES** (Simple Email Service) sends Kairos's emails: alerts, the weekly digest, and messages you approve. Every email is sent **from your address**. SES starts in a "sandbox" that only delivers to addresses that have been **verified** (the owner clicked a link from AWS). When you invite someone, Kairos asks SES to send them that link; until they click it, they get push notifications and the in-app list, but no email.
 
 ### Watching over it: CloudWatch, SNS and Budgets
 

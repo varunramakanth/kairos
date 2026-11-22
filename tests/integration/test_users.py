@@ -209,11 +209,15 @@ async def test_invites_create_a_member_with_a_cap_and_ask_ses_to_verify(
             BEA_EMAIL: True,
         }
         assert (await clients.bea("GET", "/me")).json()["role"] == "member"
-        # Bea has her own weekly digest.
+        # Bea has exactly one weekly digest of her own. (The owner may also have one,
+        # depending on whether the worker's startup digest ran before the owner's
+        # first sign-in renamed ``local``; that race is not what this test checks.)
         digests = await rows(
             engine, "SELECT user_id FROM jobs WHERE spec->>'kind' = 'digest' ORDER BY user_id"
         )
-        assert [d.user_id for d in digests] == [BEA_SUB]
+        owners = [d.user_id for d in digests]
+        assert owners.count(BEA_SUB) == 1
+        assert set(owners) <= {BEA_SUB, OWNER_SUB}
 
 
 async def test_members_cannot_use_admin_routes(database_url: str) -> None:

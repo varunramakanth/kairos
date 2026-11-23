@@ -2,7 +2,9 @@
 
 `kairos_evals` is a framework-agnostic eval library: it scores OpenTelemetry traces, and
 the Kairos harness is one adapter (`tests/evals/kairos_adapter.py`). Design decisions are
-in [ADR-011](adr/011-eval-framework.md).
+in [ADR-011](adr/011-eval-framework.md). For the full guide (synthetic data, the judge
+and its calibration, cadence, and a checklist against the AWS agent-evals article), see
+[learn/evals-guide.md](learn/evals-guide.md).
 
 ## The workflow
 

@@ -1,6 +1,6 @@
 # The harness
 
-How a run executes, how it survives crashes, and where to plug things in. The decisions behind it are in [ADR-001](adr/001-own-harness.md), [ADR-003](adr/003-durable-queue.md) and [ADR-005](adr/005-cassettes.md).
+How a run executes, how it survives crashes, and where to plug things in. For a longer walkthrough written for learning, with subagents and MCP included, see [learn/harness-guide.md](learn/harness-guide.md). The decisions behind it are in [ADR-001](adr/001-own-harness.md), [ADR-003](adr/003-durable-queue.md) and [ADR-005](adr/005-cassettes.md).
 
 ## Packages
 
